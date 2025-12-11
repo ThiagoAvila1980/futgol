@@ -1,16 +1,12 @@
 const resolveBaseUrl = () => {
-  if (typeof window !== 'undefined') {
-    const port = window.location.port || '';
-    // In dev (vite on 3000), use proxy by keeping base empty
-    if (port === '3000') return '';
-  }
   const envUrl = process.env.API_BASE_URL;
   if (envUrl) return envUrl.replace(/\/$/, '');
   if (typeof window !== 'undefined') {
-    const protocol = window.location.protocol || 'http:';
-    const host = window.location.hostname || 'localhost';
-    return `${protocol}//${host}:8000`;
+    const { hostname } = window.location as Location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return '';
+    return '';
   }
+  // Ambiente não-browser: fallback local
   return 'http://localhost:8000';
 };
 
