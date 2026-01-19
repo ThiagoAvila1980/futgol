@@ -1,0 +1,24 @@
+{
+  "name": "futgol-backend",
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch server/dev.ts",
+    "build": "tsc",
+    "start": "node dist/server/dev.js"
+  },
+  "dependencies": {
+    "@google/genai": "^1.30.0",
+    "@neondatabase/serverless": "^0.10.4",
+    "dotenv": "^17.2.3",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@locator/runtime": "^0.5.1",
+    "@types/node": "^22.14.0",
+    "tsx": "^4.19.2",
+    "typescript": "~5.8.2"
+  }
+}

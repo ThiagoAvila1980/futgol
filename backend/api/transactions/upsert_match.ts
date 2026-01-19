@@ -1,0 +1,37 @@
+import { ready } from '../_db';
+
+export default async function (req: any, res: any) {
+  const sql = await ready();
+  if (req.method !== 'POST') {
+    res.statusCode = 405;
+    res.end('Method Not Allowed');
+    return;
+  }
+  let body: any = (req as any).body;
+  if (!body || Object.keys(body).length === 0) {
+    const chunks: any[] = [];
+    for await (const chunk of req) chunks.push(chunk);
+    try { body = JSON.parse(Buffer.concat(chunks).toString() || '{}'); } catch { body = {}; }
+  }
+
+  const groupId = String(body.groupId || '');
+  const matchId = String(body.matchId || '');
+  const totalAmount = Number(body.totalAmount ?? 0);
+  const description = String(body.description || 'Agregado da partida');
+  const date = String(body.date || new Date().toISOString().split('T')[0]);
+  const id = `match_agg_${groupId}_${matchId}`;
+
+  try {
+    await sql(`INSERT INTO transactions(id, group_id, description, amount, type, date, category, related_match_id)
+               VALUES($1,$2,$3,$4,'INCOME',$5,'MATCH_REVENUE',$6)
+               ON CONFLICT (id) DO UPDATE SET group_id=EXCLUDED.group_id, description=EXCLUDED.description, amount=EXCLUDED.amount, type=EXCLUDED.type, date=EXCLUDED.date, category=EXCLUDED.category, related_match_id=EXCLUDED.related_match_id`,
+      [id, groupId, description, totalAmount, date, matchId]
+    );
+    res.statusCode = 204;
+    res.end('');
+  } catch (err: any) {
+    console.error('Error in upsert_match transaction:', err);
+    res.statusCode = 500;
+    res.end(JSON.stringify({ error: err.message }));
+  }
+}

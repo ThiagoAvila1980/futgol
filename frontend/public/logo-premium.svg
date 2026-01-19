@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16a34a"/>
+      <stop offset="1" stop-color="#065f46"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#fbbf24"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="24" fill="url(#g1)"/>
+  <g transform="translate(16,16)">
+    <path d="M48 0l26 10v26c0 20-12 38-26 46-14-8-26-26-26-46V10z" fill="rgba(255,255,255,0.15)"/>
+    <circle cx="48" cy="38" r="22" fill="#ffffff"/>
+    <path d="M48 18l8 6-3 9h-10l-3-9z" fill="#065f46"/>
+    <path d="M48 58l8-6-3-9h-10l-3 9z" fill="#065f46"/>
+    <circle cx="48" cy="38" r="6" fill="url(#g2)"/>
+    <text x="48" y="88" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="700" text-anchor="middle" fill="#ffffff">FUTGOL</text>
+  </g>
+</svg>
