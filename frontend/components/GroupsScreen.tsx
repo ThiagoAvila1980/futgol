@@ -156,7 +156,13 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
     if (isSaving) return; // Prevent double click
     try {
       setIsSaving(true);
-      const newGroupId = crypto.randomUUID();
+      const genId = (prefix: string) => {
+        const c: any = (window as any).crypto;
+        if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+        return `${prefix}_` + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      };
+
+      const newGroupId = genId('group');
 
       const newGroup: Group = {
         id: newGroupId,

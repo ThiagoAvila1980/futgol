@@ -18,12 +18,14 @@ export default async function (req: any, res: any) {
     fieldId: m.field_id,
     confirmedPlayerIds: m.confirmed_player_ids ? JSON.parse(m.confirmed_player_ids) : [],
     paidPlayerIds: m.paid_player_ids ? JSON.parse(m.paid_player_ids) : [],
+    arrivedPlayerIds: m.arrived_player_ids ? JSON.parse(m.arrived_player_ids) : [],
     teamA: m.team_a ? JSON.parse(m.team_a) : [],
     teamB: m.team_b ? JSON.parse(m.team_b) : [],
     scoreA: Number(m.score_a || 0),
     scoreB: Number(m.score_b || 0),
     finished: !!m.finished,
-    mvpId: m.mvp_id || undefined
+    mvpId: m.mvp_id || undefined,
+    subMatches: m.sub_matches ? JSON.parse(m.sub_matches) : []
   }));
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/json');

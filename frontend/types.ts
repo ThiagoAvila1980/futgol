@@ -87,6 +87,16 @@ export interface Team {
   players: Player[];
 }
 
+export interface SubMatch {
+  id: string;
+  name: string;
+  teamA: Player[];
+  teamB: Player[];
+  scoreA: number;
+  scoreB: number;
+  finished: boolean;
+}
+
 export interface Match {
   id: string;
   groupId: string; // Links match to a specific group
@@ -95,12 +105,14 @@ export interface Match {
   fieldId: string;
   confirmedPlayerIds: string[];
   paidPlayerIds?: string[]; // New: List of players who paid for this specific match
+  arrivedPlayerIds?: string[]; // New: List of players who arrived (queue order)
   teamA: Player[];
   teamB: Player[];
   scoreA: number;
   scoreB: number;
   finished: boolean;
   mvpId?: string; // ID of the "Man of the Match"
+  subMatches?: SubMatch[];
 }
 
 // New Financial Types
@@ -126,6 +138,7 @@ export interface Transaction {
   | 'OTHER';
   relatedPlayerId?: string; // If related to a specific player paying monthly fee
   relatedMatchId?: string; // NEW: If related to a specific match aggregation
+  paidPlayerIds?: string[]; // IDs of players who contributed to an aggregated transaction
 }
 
 export type ViewState = 'dashboard' | 'players' | 'fields' | 'matches' | 'groups' | 'profile' | 'financial';

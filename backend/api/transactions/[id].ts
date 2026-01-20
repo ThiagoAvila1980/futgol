@@ -25,14 +25,15 @@ export default async function (req: any, res: any) {
       date: String(body.date || new Date().toISOString().split('T')[0]),
       category: String(body.category || 'OTHER'),
       related_player_id: body.relatedPlayerId ? String(body.relatedPlayerId) : null,
-      related_match_id: body.relatedMatchId ? String(body.relatedMatchId) : null
+      related_match_id: body.relatedMatchId ? String(body.relatedMatchId) : null,
+      paid_player_ids: body.paidPlayerIds ? (Array.isArray(body.paidPlayerIds) ? body.paidPlayerIds.join(',') : String(body.paidPlayerIds)) : null
     };
 
     try {
-      await sql(`INSERT INTO transactions(id, group_id, description, amount, type, date, category, related_player_id, related_match_id)
-                 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
-                 ON CONFLICT (id) DO UPDATE SET group_id=EXCLUDED.group_id, description=EXCLUDED.description, amount=EXCLUDED.amount, type=EXCLUDED.type, date=EXCLUDED.date, category=EXCLUDED.category, related_player_id=EXCLUDED.related_player_id, related_match_id=EXCLUDED.related_match_id`,
-        [payload.id, payload.group_id, payload.description, payload.amount, payload.type, payload.date, payload.category, payload.related_player_id, payload.related_match_id]
+      await sql(`INSERT INTO transactions(id, group_id, description, amount, type, date, category, related_player_id, related_match_id, paid_player_ids)
+                 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+                 ON CONFLICT (id) DO UPDATE SET group_id=EXCLUDED.group_id, description=EXCLUDED.description, amount=EXCLUDED.amount, type=EXCLUDED.type, date=EXCLUDED.date, category=EXCLUDED.category, related_player_id=EXCLUDED.related_player_id, related_match_id=EXCLUDED.related_match_id, paid_player_ids=EXCLUDED.paid_player_ids`,
+        [payload.id, payload.group_id, payload.description, payload.amount, payload.type, payload.date, payload.category, payload.related_player_id, payload.related_match_id, payload.paid_player_ids]
       );
       res.statusCode = 204;
       res.end('');

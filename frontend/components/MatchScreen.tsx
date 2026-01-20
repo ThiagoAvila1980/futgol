@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import DateInput from './DateInput';
-import { Player, Field, Match, User, Group, Position, Comment } from '../types';
-import { balanceTeamsWithAI } from '../services/geminiService';
+import { Player, Field, Match, User, Group, Position, Comment, SubMatch } from '../types';
+// import { balanceTeamsWithAI } from '../services/geminiService';
 import { storage } from '../services/storage';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
@@ -25,12 +25,13 @@ interface MatchScreenProps {
   activeGroupId: string;
   currentUser: User;
   activeGroup: Group;
-  onRefresh?: () => Promise<void>;
+  onRefresh?: () => Promise<any>;
+  isLoading?: boolean;
 }
 
-export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, matches, onSave, onDelete, activeGroupId, currentUser, activeGroup, onRefresh }) => {
+export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, matches, onSave, onDelete, activeGroupId, currentUser, activeGroup, onRefresh, isLoading }) => {
   // Estados de Controle de Visualização
-  const [view, setView] = useState<'list' | 'details'>('list');
+  const [view, setView] = useState<'list' | 'details' | 'queue'>('list');
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
 
   // Estados de Filtro (Lista de Presença e Pagamentos)
@@ -56,6 +57,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
   // Estados de proteção contra cliques duplos (pagamento e presença)
   const [updatingPaymentFor, setUpdatingPaymentFor] = useState<string | null>(null);
   const [updatingPresenceFor, setUpdatingPresenceFor] = useState<string | null>(null);
+  const [updatingArrivalFor, setUpdatingArrivalFor] = useState<string | null>(null);
 
   // Gerenciamento de Convidados
   const [guestName, setGuestName] = useState('');
@@ -64,7 +66,13 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
 
   // Equilíbrio de Times com Inteligência Artificial
   const [isBalancing, setIsBalancing] = useState(false);
+  const [outfieldPlayers, setOutfieldPlayers] = useState(5);
+  const [subMatches, setSubMatches] = useState<SubMatch[]>([]);
   const [aiReasoning, setAiReasoning] = useState<string | null>(null);
+  const [draggingPlayer, setDraggingPlayer] = useState<{ playerId: string, subMatchId: string, fromTeam: 'A' | 'B' } | null>(null);
+  const [dragOverTeam, setDragOverTeam] = useState<{ subMatchId: string, team: 'A' | 'B' } | null>(null);
+  const [touchDragPosition, setTouchDragPosition] = useState<{ x: number, y: number } | null>(null);
+  const [isTouchDragging, setIsTouchDragging] = useState(false);
 
   // Confirmação de Exclusão e Busca de Convidados
   const [matchToDelete, setMatchToDelete] = useState<string | null>(null);
@@ -100,6 +108,8 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
   // Localiza o perfil de jogador vinculado ao usuário logado
   const currentPlayer = players.find(p => p.userId === currentUser.id);
 
+  const getDisplayName = (p: Player) => p.nickname || p.name;
+
   const currentMonth = () => new Date().toISOString().split('T')[0].slice(0, 7);
   // Sincroniza o status de pagamento mensal dos jogadores do grupo
   const loadMonthlyStatus = async () => {
@@ -130,6 +140,12 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
     }
   };
 
+  const genSafeId = (prefix: string = 'id') => {
+    const c: any = (window as any).crypto;
+    if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+    return `${prefix}_` + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  };
+
   const firstDayOfCurrentMonth = () => {
     const d = new Date();
     const y = d.getFullYear();
@@ -140,7 +156,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
   const syncMonthlyAggregate = async (paidCount: number) => {
     const amt = (Number(activeGroup.fixedAmount || 0)) * paidCount;
     const tx = {
-      id: monthlyAggregateId || crypto.randomUUID(),
+      id: monthlyAggregateId || genSafeId('aggregate'),
       groupId: activeGroupId,
       description: 'Mensalistas',
       amount: amt,
@@ -159,6 +175,15 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
     }
   }, [view, selectedMatch, activeGroupId]);
 
+  useEffect(() => {
+    if (selectedMatch) {
+      setSubMatches(selectedMatch.subMatches || []);
+    } else {
+      setSubMatches([]);
+    }
+  }, [selectedMatch]);
+
+
   const loadComments = async () => {
     try {
       if (!selectedMatch) return;
@@ -175,13 +200,8 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
 
   const submitNewComment = async () => {
     if (!selectedMatch || !newCommentText.trim() || isSaving) return;
-    const genId = () => {
-      const c: any = (window as any).crypto;
-      if (c && typeof c.randomUUID === 'function') return c.randomUUID();
-      return 'id_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    };
     const c: Comment = {
-      id: genId(),
+      id: genSafeId('comment'),
       groupId: activeGroupId,
       matchId: selectedMatch.id,
       parentId: undefined,
@@ -205,13 +225,8 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
     if (!selectedMatch) return;
     const text = (replyTextMap[parentId] || '').trim();
     if (!text || isSaving) return;
-    const genId = () => {
-      const c: any = (window as any).crypto;
-      if (c && typeof c.randomUUID === 'function') return c.randomUUID();
-      return 'id_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    };
     const c: Comment = {
-      id: genId(),
+      id: genSafeId('reply'),
       groupId: activeGroupId,
       matchId: selectedMatch.id,
       parentId,
@@ -263,7 +278,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
       if (existingId) {
         await storage.transactions.delete(existingId);
       } else {
-        const txId = crypto.randomUUID();
+        const txId = genSafeId('monthly');
         const amt = Number(activeGroup.fixedAmount || 0);
         const tx = {
           id: txId,
@@ -320,14 +335,10 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
           fieldId
         };
       } else {
-        const genId = () => {
-          const c: any = (window as any).crypto;
-          if (c && typeof c.randomUUID === 'function') return c.randomUUID();
-          return 'match_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-        };
+        const id = genSafeId('match');
 
         matchToSave = {
-          id: genId(),
+          id,
           groupId: activeGroupId,
           date,
           time,
@@ -436,10 +447,34 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
       if (selectedMatch?.id === matchId) {
         setSelectedMatch(updatedMatch);
       }
-
       await onSave(updatedMatch);
     } finally {
       setUpdatingPresenceFor(null);
+      setIsSaving(false); // Reset isSaving
+    }
+  };
+
+  const toggleArrival = async (matchId: string, playerId: string) => {
+    if (!selectedMatch || !isAdmin || isSaving) return; // Added isSaving check
+    if (updatingArrivalFor === playerId) return; // Proteção contra duplo clique
+
+    try {
+      setIsSaving(true); // Set isSaving
+      setUpdatingArrivalFor(playerId);
+      const currentArrived = selectedMatch.arrivedPlayerIds || [];
+      let newArrived: string[];
+
+      if (currentArrived.includes(playerId)) {
+        newArrived = currentArrived.filter(id => id !== playerId);
+      } else {
+        newArrived = [...currentArrived, playerId];
+      }
+
+      const updatedMatch = { ...selectedMatch, arrivedPlayerIds: newArrived };
+      setSelectedMatch(updatedMatch);
+      await onSave(updatedMatch);
+    } finally {
+      setUpdatingArrivalFor(null);
       setIsSaving(false); // Reset isSaving
     }
   };
@@ -473,9 +508,15 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
       // --- FINANCIAL SYNC ---
       const confirmedCount = updatedMatch.confirmedPlayerIds.length;
       const costPerPersonSync = calculateCostPerPlayer(updatedMatch);
+
+      // Filtra apenas jogadores que NÃO são mensalistas para compor a receita da pelada
+      const nonMonthlyPaidCount = players.filter(p =>
+        newPaidList.includes(p.id) && !p.isMonthlySubscriber
+      ).length;
+
       if (confirmedCount > 0 && costPerPersonSync > 0) {
-        const totalAmount = newPaidList.length * costPerPersonSync;
-        const description = `Pagamentos Avulsos - ${match.date.split('-').reverse().join('/')} - ${field.name}`;
+        const totalAmount = nonMonthlyPaidCount * costPerPersonSync;
+        const description = `Jogadores Avulso : ${field.name}`;
         await storage.transactions.upsertMatchTransaction(
           activeGroupId,
           matchId,
@@ -511,37 +552,344 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
     }
   };
 
-  const handleGenerateTeams = async (match: Match) => {
-    if (!isAdmin || isBalancing || isSaving) return;
-    if (match.confirmedPlayerIds.length < 2) {
-      alert("Selecione pelo menos 2 jogadores confirmados para dividir os times.");
+  const balanceTeamsManual = (playersToBalance: Player[]): { teamAIds: string[]; teamBIds: string[]; reasoning: string } => {
+    // UPDATED: Distribuir apenas jogadores de linha usando padrão snake (A, B, B, A...) para maior equilíbrio
+    const others = playersToBalance.filter(p => p.position !== Position.GOLEIRO)
+      .sort((a, b) => (b.rating || 0) - (a.rating || 0));
+
+    const teamAIds: string[] = [];
+    const teamBIds: string[] = [];
+
+    others.forEach((p, index) => {
+      const groupOfFourIndex = index % 4;
+      if (groupOfFourIndex === 0 || groupOfFourIndex === 3) {
+        teamAIds.push(p.id);
+      } else {
+        teamBIds.push(p.id);
+      }
+    });
+
+    return {
+      teamAIds,
+      teamBIds,
+      reasoning: "Equilíbrio manual baseado em nível técnico (Padrão Snake). Goleiros devem ser adicionados manualmente."
+    };
+  };
+
+  const handleGenerateTeams = async (match: Match | null) => {
+    console.log("Iniciando geração de times...", { isAdmin, isBalancing, isSaving, outfieldPlayers });
+    if (!isAdmin || isBalancing || isSaving || !match) return;
+
+    // Total de jogadores de linha por time
+    const totalNeeded = outfieldPlayers * 2;
+
+    const currentArrivedIds = match?.arrivedPlayerIds || [];
+
+    // Filtra apenas jogadores de linha na fila
+    const arrivedOutfielderIds = currentArrivedIds.filter(id => {
+      const p = players.find(player => player.id === id);
+      return p && p.position !== Position.GOLEIRO;
+    });
+
+    if (arrivedOutfielderIds.length < totalNeeded) {
+      alert(`Para ${outfieldPlayers} de linha, você precisa de pelo menos ${totalNeeded} jogadores de linha presentes (Goleiros não contam).`);
       return;
     }
 
+    // Pega os primeiros jogadores de linha na fila que respeitam a ordem de chegada
+    const matchOutfielderIds = arrivedOutfielderIds.slice(0, totalNeeded);
+    const matchPlayers = players.filter(p => matchOutfielderIds.includes(p.id));
+
     setIsBalancing(true);
-    setIsSaving(true); // Set isSaving
+    setIsSaving(true);
     setAiReasoning(null);
 
     try {
-      const confirmedPlayers = players.filter(p => match.confirmedPlayerIds.includes(p.id));
-      const { teamAIds, teamBIds, reasoning } = await balanceTeamsWithAI(confirmedPlayers);
+      console.log(`Calculando próximo jogo...`);
 
-      const updatedMatch = {
-        ...match,
-        teamA: confirmedPlayers.filter(p => teamAIds.includes(p.id)),
-        teamB: confirmedPlayers.filter(p => teamBIds.includes(p.id))
+      let tA: Player[] = [];
+      let tB: Player[] = [];
+      let reasoning = "Equilíbrio manual baseado em nível técnico (Padrão Snake).";
+
+      if (subMatches.length === 0) {
+        // --- PRIMEIRO JOGO DO DIA ---
+        // Pega os primeiros 2N jogadores de linha para equilibrar
+        const firstTwoTeamsIds = arrivedOutfielderIds.slice(0, outfieldPlayers * 2);
+        const matchPlayers = players.filter(p => firstTwoTeamsIds.includes(p.id));
+
+        const balanced = balanceTeamsManual(matchPlayers);
+        tA = matchPlayers.filter(p => balanced.teamAIds.includes(p.id));
+        tB = matchPlayers.filter(p => balanced.teamBIds.includes(p.id));
+        reasoning = balanced.reasoning;
+      } else {
+        // --- ROTAÇÃO (REI DA QUADRA) ---
+        const lastSM = subMatches[subMatches.length - 1];
+        const prevSM = subMatches.length > 1 ? subMatches[subMatches.length - 2] : null;
+
+        let stayingPlayers: Player[] = [];
+        let incomingFromLast: Player[] = [];
+
+        if (!prevSM) {
+          // Após o Jogo 1: O vencedor fica (ou Time A em empate)
+          if (lastSM.scoreB > lastSM.scoreA) {
+            stayingPlayers = lastSM.teamB;
+            incomingFromLast = lastSM.teamB;
+          } else {
+            stayingPlayers = lastSM.teamA;
+            incomingFromLast = lastSM.teamB; // Assumimos B como entrante no J1
+          }
+        } else {
+          // Após Jogo 2+: Quem jogou 2 seguidas sai. Quem jogou 1 fica.
+          const wasInPrev = (pId: string) => prevSM.teamA.some(p => p.id === pId) || prevSM.teamB.some(p => p.id === pId);
+
+          const teamAPlayedTwo = lastSM.teamA.some(p => wasInPrev(p.id));
+          const teamBPlayedTwo = lastSM.teamB.some(p => wasInPrev(p.id));
+
+          if (teamAPlayedTwo && !teamBPlayedTwo) {
+            stayingPlayers = lastSM.teamB;
+            incomingFromLast = lastSM.teamB;
+          } else if (teamBPlayedTwo && !teamAPlayedTwo) {
+            stayingPlayers = lastSM.teamA;
+            incomingFromLast = lastSM.teamA;
+          } else {
+            // Caso ambos tenham jogado 1 (ex: mudança manual radical) ou ambos 2, vencedor do último fica
+            stayingPlayers = (lastSM.scoreB > lastSM.scoreA) ? lastSM.teamB : lastSM.teamA;
+            incomingFromLast = stayingPlayers;
+          }
+        }
+
+        tA = stayingPlayers;
+
+        // Acha onde parou na fila para o próximo time (Time B)
+        // Usamos o time que entrou por último no jogo anterior como referência
+        const lastInQueue = arrivedOutfielderIds.reduce((maxIdx, id) => {
+          if (incomingFromLast.some(p => p.id === id)) {
+            const idx = arrivedOutfielderIds.indexOf(id);
+            return Math.max(maxIdx, idx);
+          }
+          return maxIdx;
+        }, -1);
+
+        // Gera o Time B buscando os próximos N disponíveis
+        const teamBIds: string[] = [];
+        let cursor = (lastInQueue + 1) % arrivedOutfielderIds.length;
+        let attempts = 0;
+
+        while (teamBIds.length < outfieldPlayers && attempts < arrivedOutfielderIds.length) {
+          const pid = arrivedOutfielderIds[cursor];
+          // Só adiciona se não estiver já no time que ficou
+          if (!tA.some(p => p.id === pid)) {
+            teamBIds.push(pid);
+          }
+          cursor = (cursor + 1) % arrivedOutfielderIds.length;
+          attempts++;
+        }
+
+        tB = players.filter(p => teamBIds.includes(p.id))
+          .sort((a, b) => teamBIds.indexOf(a.id) - teamBIds.indexOf(b.id));
+        reasoning = `Rotação automática: Time que ficou + Próximos ${outfieldPlayers} da fila.`;
+      }
+
+      const newSubMatch: SubMatch = {
+        id: genSafeId('submatch'),
+        name: `Jogo ${subMatches.length + 1}`,
+        teamA: tA,
+        teamB: tB,
+        scoreA: 0,
+        scoreB: 0,
+        finished: false
       };
 
-      await onSave(updatedMatch);
-      setSelectedMatch(updatedMatch);
+      const newSubMatches = [...subMatches, newSubMatch];
+      setSubMatches(newSubMatches);
       setAiReasoning(reasoning);
 
-    } catch (error) {
-      alert("Erro ao gerar times. Verifique sua chave de API ou tente novamente.");
+      const updatedMatch = { ...match, teamA: tA, teamB: tB, subMatches: newSubMatches };
+      await onSave(updatedMatch);
+      setSelectedMatch(updatedMatch);
+      console.log("Próximo jogo gerado com sucesso respeitando a rotação de 2 partidas.");
+
+    } catch (error: any) {
+      console.error("Erro ao gerar partida:", error);
+      alert(`Erro ao gerar times: ${error?.message || 'Tente novamente.'}`);
     } finally {
       setIsBalancing(false);
-      setIsSaving(false); // Reset isSaving
+      setIsSaving(false);
     }
+  };
+
+  const handleUpdateSubMatchScore = async (subMatchId: string, team: 'A' | 'B', score: number) => {
+    if (!selectedMatch) return;
+    const newSubMatches = subMatches.map(sm => {
+      if (sm.id !== subMatchId) return sm;
+      return {
+        ...sm,
+        scoreA: team === 'A' ? score : sm.scoreA,
+        scoreB: team === 'B' ? score : sm.scoreB,
+      };
+    });
+    setSubMatches(newSubMatches);
+    const updatedMatch = { ...selectedMatch, subMatches: newSubMatches };
+    await onSave(updatedMatch);
+    // Note: No setSelectedMatch here to avoid potential feedback loops if not needed, 
+    // but usually onSave returns the updated match or we assume success.
+    // Given the flow, it's better to keep local state updated.
+  };
+
+  const handleFinishSubMatch = async (subMatchId: string) => {
+    if (!selectedMatch) return;
+    const newSubMatches = subMatches.map(sm =>
+      sm.id === subMatchId ? { ...sm, finished: true } : sm
+    );
+    setSubMatches(newSubMatches);
+    const updatedMatch = { ...selectedMatch, subMatches: newSubMatches };
+    await onSave(updatedMatch);
+  };
+
+  const handleRemovePlayerFromSubMatch = async (subMatchId: string, team: 'A' | 'B', playerId: string) => {
+    if (!selectedMatch) return;
+    const newSubMatches = subMatches.map(sm => {
+      if (sm.id !== subMatchId) return sm;
+      return {
+        ...sm,
+        teamA: team === 'A' ? sm.teamA.filter(p => p.id !== playerId) : sm.teamA,
+        teamB: team === 'B' ? sm.teamB.filter(p => p.id !== playerId) : sm.teamB,
+      };
+    });
+    setSubMatches(newSubMatches);
+    await onSave({ ...selectedMatch, subMatches: newSubMatches });
+  };
+
+  const handleAddPlayerToSubMatch = async (subMatchId: string, team: 'A' | 'B', player: Player) => {
+    if (!selectedMatch) return;
+    const newSubMatches = subMatches.map(sm => {
+      if (sm.id !== subMatchId) return sm;
+      if (sm.teamA.some(p => p.id === player.id) || sm.teamB.some(p => p.id === player.id)) return sm;
+      return {
+        ...sm,
+        teamA: team === 'A' ? [...sm.teamA, player] : sm.teamA,
+        teamB: team === 'B' ? [...sm.teamB, player] : sm.teamB,
+      };
+    });
+    setSubMatches(newSubMatches);
+    await onSave({ ...selectedMatch, subMatches: newSubMatches });
+  };
+
+  const handleDragStart = (playerId: string, subMatchId: string, fromTeam: 'A' | 'B') => {
+    if (!isAdmin) return;
+    setDraggingPlayer({ playerId, subMatchId, fromTeam });
+  };
+
+  const handleDragOver = (e: React.DragEvent, subMatchId: string, team: 'A' | 'B') => {
+    e.preventDefault();
+    if (draggingPlayer && draggingPlayer.subMatchId === subMatchId && draggingPlayer.fromTeam !== team) {
+      setDragOverTeam({ subMatchId, team });
+    }
+  };
+
+  const handleDrop = async (subMatchId: string, toTeam: 'A' | 'B') => {
+    setDragOverTeam(null);
+    if (!draggingPlayer || draggingPlayer.subMatchId !== subMatchId || draggingPlayer.fromTeam === toTeam) {
+      setDraggingPlayer(null);
+      return;
+    }
+
+    // Handle main match teams
+    if (selectedMatch && subMatchId === selectedMatch.id) {
+      const player = (draggingPlayer.fromTeam === 'A' ? selectedMatch.teamA : selectedMatch.teamB).find(p => p.id === draggingPlayer.playerId);
+      if (!player) {
+        setDraggingPlayer(null);
+        return;
+      }
+
+      const newTeamA = draggingPlayer.fromTeam === 'A'
+        ? selectedMatch.teamA.filter(p => p.id !== draggingPlayer.playerId)
+        : [...selectedMatch.teamA, player];
+
+      const newTeamB = draggingPlayer.fromTeam === 'B'
+        ? selectedMatch.teamB.filter(p => p.id !== draggingPlayer.playerId)
+        : [...selectedMatch.teamB, player];
+
+      const updatedMatch = { ...selectedMatch, teamA: newTeamA, teamB: newTeamB };
+      setSelectedMatch(updatedMatch);
+      await onSave(updatedMatch);
+      setDraggingPlayer(null);
+      return;
+    }
+
+    const newSubMatches = subMatches.map(sm => {
+      if (sm.id !== subMatchId) return sm;
+
+      const player = (draggingPlayer.fromTeam === 'A' ? sm.teamA : sm.teamB).find(p => p.id === draggingPlayer.playerId);
+      if (!player) return sm;
+
+      const newTeamA = draggingPlayer.fromTeam === 'A'
+        ? sm.teamA.filter(p => p.id !== draggingPlayer.playerId)
+        : [...sm.teamA, player];
+
+      const newTeamB = draggingPlayer.fromTeam === 'B'
+        ? sm.teamB.filter(p => p.id !== draggingPlayer.playerId)
+        : [...sm.teamB, player];
+
+      return { ...sm, teamA: newTeamA, teamB: newTeamB };
+    });
+
+    setSubMatches(newSubMatches);
+    if (selectedMatch) {
+      await onSave({ ...selectedMatch, subMatches: newSubMatches });
+    }
+
+    setDraggingPlayer(null);
+  };
+
+  const handleTouchStart = (playerId: string, subMatchId: string, fromTeam: 'A' | 'B', e: React.TouchEvent) => {
+    if (!isAdmin) return;
+    const touch = e.touches[0];
+    setDraggingPlayer({ playerId, subMatchId, fromTeam });
+    setTouchDragPosition({ x: touch.clientX, y: touch.clientY });
+    setIsTouchDragging(false); // Only start moving after a small movement to allow scroll
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!draggingPlayer || !touchDragPosition) return;
+    const touch = e.touches[0];
+
+    // Prevent scrolling when dragging
+    if (Math.abs(touch.clientX - touchDragPosition.x) > 10 || Math.abs(touch.clientY - touchDragPosition.y) > 10) {
+      if (e.cancelable) e.preventDefault();
+      setIsTouchDragging(true);
+    }
+
+    if (!isTouchDragging) return;
+
+    setTouchDragPosition({ x: touch.clientX, y: touch.clientY });
+
+    // Detect drop target
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    const dropZone = element?.closest('[data-drop-zone]');
+    if (dropZone) {
+      const smId = dropZone.getAttribute('data-submatch-id');
+      const team = dropZone.getAttribute('data-drop-zone') as 'A' | 'B';
+      if (smId === draggingPlayer.subMatchId && team !== draggingPlayer.fromTeam) {
+        setDragOverTeam({ subMatchId: smId, team });
+      } else {
+        setDragOverTeam(null);
+      }
+    } else {
+      setDragOverTeam(null);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!draggingPlayer) return;
+    if (dragOverTeam) {
+      handleDrop(dragOverTeam.subMatchId, dragOverTeam.team);
+    } else {
+      setDraggingPlayer(null);
+      setDragOverTeam(null);
+    }
+    setTouchDragPosition(null);
+    setIsTouchDragging(false);
   };
 
   const handleFinishMatch = async () => {
@@ -550,14 +898,49 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
     const updatedMatch = {
       ...selectedMatch,
       finished: true,
-      scoreA,
-      scoreB,
-      mvpId: mvpId || undefined
+      scoreA: selectedMatch.scoreA, // Use current scores if stored or 0
+      scoreB: selectedMatch.scoreB,
+      mvpId: undefined
     };
 
     try {
       setIsSaving(true);
       await onSave(updatedMatch);
+
+      // Gerar transação automática de saída para o aluguel do campo
+      const field = fields.find(f => f.id === selectedMatch.fieldId);
+      if (field) {
+        const fieldExpense = {
+          id: genSafeId('expense'),
+          groupId: activeGroupId,
+          description: `Pagamento de Campo/Quadra : ${field.name}`,
+          amount: field.hourlyRate,
+          type: 'EXPENSE' as const,
+          category: 'FIELD_RENT' as const,
+          date: selectedMatch.date, // Data do jogo
+          relatedMatchId: selectedMatch.id
+        };
+        await storage.transactions.save(fieldExpense as any);
+      }
+
+      // Gerar/Atualizar transação automática de entrada para os pagamentos dos jogadores
+      // Filtra apenas jogadores que NÃO são mensalistas para entrar na receita avulsa da pelada
+      const nonMonthlyPaidCount = players.filter(p =>
+        (selectedMatch.paidPlayerIds || []).includes(p.id) && !p.isMonthlySubscriber
+      ).length;
+
+      const costPerPerson = calculateCostPerPlayer(selectedMatch);
+      if (field && nonMonthlyPaidCount > 0) {
+        const totalIncome = nonMonthlyPaidCount * costPerPerson;
+        const incomeDescription = `Jogadores Avulso : ${field.name}`;
+        await storage.transactions.upsertMatchTransaction(
+          activeGroupId,
+          selectedMatch.id,
+          totalIncome,
+          incomeDescription,
+          selectedMatch.date
+        );
+      }
 
       setIsFinishing(false);
       setSelectedMatch(null);
@@ -567,7 +950,6 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
     }
   };
 
-  const getDisplayName = (p: Player) => p.nickname || p.name;
 
   const calculateCostPerPlayer = (match: Match) => {
     const field = fields.find(f => f.id === match.fieldId);
@@ -623,6 +1005,562 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
     const encodedText = encodeURIComponent(text);
     window.open(`https://wa.me/?text=${encodedText}`, '_blank');
   };
+
+  // --- QUEUE VIEW (ARRIVAL CONTROL) ---
+  if (view === 'queue' && selectedMatch) {
+    return (
+      <div className="space-y-6 animate-fade-in relative mb-20">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setView('details')}
+          className="flex items-center gap-1 text-navy-500 hover:text-brand-600 pl-0"
+          leftIcon={<span className="text-xl">←</span>}
+        >
+          Voltar para o jogo
+        </Button>
+
+        <header className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-2xl font-black text-navy-900 tracking-tight">Controle de Chegada</h3>
+            <div className="flex items-center gap-2 px-4 py-2 bg-brand-50 rounded-xl border border-brand-100">
+              <span className="text-brand-600 font-bold text-lg">{(selectedMatch.arrivedPlayerIds || []).length}</span>
+              <span className="text-xs text-brand-500 uppercase font-black tracking-widest">Presentes</span>
+            </div>
+          </div>
+          <p className="text-sm text-navy-500 font-medium">Separação por status de chegada. Clique no nome para alternar.</p>
+        </header>
+
+        {(() => {
+          const confirmedPlayers = players.filter(p => selectedMatch.confirmedPlayerIds.includes(p.id));
+          const arrivedIds = selectedMatch.arrivedPlayerIds || [];
+
+          const waitingPlayers = confirmedPlayers
+            .filter(p => !arrivedIds.includes(p.id))
+            .sort((a, b) => (a.nickname || a.name).localeCompare(b.nickname || b.name));
+
+          const arrivedPlayers = arrivedIds
+            .map(id => confirmedPlayers.find(p => p.id === id))
+            .filter((p): p is Player => !!p);
+
+          return (
+            <div className="grid grid-cols-2 gap-3 sm:gap-8 items-start">
+              {/* Coluna da Esquerda: Aguardando */}
+              <div className="space-y-4">
+                <h4 className="flex items-center gap-2 text-[9px] sm:text-xs font-black text-navy-400 uppercase tracking-widest sm:tracking-[0.2em] px-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-navy-200"></span>
+                  Confirmados ({waitingPlayers.length})
+                </h4>
+                <div className="grid grid-cols-1 gap-2 sm:gap-3 max-h-[50vh] sm:max-h-[600px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-navy-200">
+                  {waitingPlayers.map(player => {
+                    const positionColor =
+                      player.position === Position.GOLEIRO ? 'border-l-red-500' :
+                        player.position === Position.DEFENSOR ? 'border-l-orange-500' :
+                          player.position === Position.MEIO ? 'border-l-blue-500' :
+                            'border-l-green-500';
+
+                    return (
+                      <div
+                        key={player.id}
+                        onClick={() => isAdmin && toggleArrival(selectedMatch.id, player.id)}
+                        className={cn(
+                          "p-3 sm:p-4 rounded-r-xl sm:rounded-r-2xl border-2 border-navy-100 border-l-[6px] sm:border-l-8 bg-white active:bg-navy-50 shadow-sm transition-all flex items-center justify-between cursor-pointer select-none group",
+                          positionColor
+                        )}
+                      >
+                        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-extrabold text-navy-900 text-sm sm:text-lg truncate">
+                              {player.nickname || player.name}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className={cn(
+                                "text-[9px] sm:text-[10px] uppercase font-bold tracking-tighter truncate px-1 rounded",
+                                player.position === Position.GOLEIRO ? "bg-red-50 text-red-600" :
+                                  player.position === Position.DEFENSOR ? "bg-orange-50 text-orange-600" :
+                                    player.position === Position.MEIO ? "bg-blue-50 text-blue-600" :
+                                      "bg-green-50 text-green-600"
+                              )}>
+                                {player.position}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {waitingPlayers.length === 0 && (
+                    <div className="py-8 sm:py-12 text-center border-2 border-dashed border-navy-50 rounded-2xl sm:rounded-3xl text-navy-300 text-[10px] sm:text-sm italic bg-navy-50/20 px-2">
+                      Vazio! ⚽
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Coluna da Direita: Já Chegaram */}
+              <div className="space-y-4">
+                <h4 className="flex items-center gap-2 text-[9px] sm:text-xs font-black text-brand-600 uppercase tracking-widest sm:tracking-[0.2em] px-1">
+                  <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse"></span>
+                  Presentes ({arrivedPlayers.length})
+                </h4>
+                <div className="grid grid-cols-1 gap-2 sm:gap-3 max-h-[50vh] sm:max-h-[600px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-brand-200">
+                  {arrivedPlayers.map((player, index) => {
+                    const positionColor =
+                      player.position === Position.GOLEIRO ? 'border-l-red-500' :
+                        player.position === Position.DEFENSOR ? 'border-l-orange-500' :
+                          player.position === Position.MEIO ? 'border-l-blue-500' :
+                            'border-l-green-500';
+
+                    return (
+                      <div
+                        key={player.id}
+                        onClick={() => isAdmin && toggleArrival(selectedMatch.id, player.id)}
+                        className={cn(
+                          "p-3 sm:p-4 rounded-r-xl sm:rounded-r-2xl border-2 border-navy-100 border-l-[6px] sm:border-l-8 bg-white shadow-md active:scale-[0.98] transition-all flex items-center justify-between cursor-pointer select-none group",
+                          positionColor
+                        )}
+                      >
+                        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-black text-navy-900 text-sm sm:text-lg truncate">
+                              {player.nickname || player.name}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className={cn(
+                                "text-[9px] sm:text-[10px] uppercase font-bold tracking-tighter truncate px-1 rounded",
+                                player.position === Position.GOLEIRO ? "bg-red-50 text-red-600" :
+                                  player.position === Position.DEFENSOR ? "bg-orange-50 text-orange-600" :
+                                    player.position === Position.MEIO ? "bg-blue-50 text-blue-600" :
+                                      "bg-green-50 text-green-600"
+                              )}>
+                                {player.position}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="w-5 h-5 sm:w-8 sm:h-8 rounded-full bg-navy-900 text-white flex items-center justify-center font-black shadow-lg text-[10px] sm:text-sm shrink-0">
+                          {index + 1}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {arrivedPlayers.length === 0 && (
+                    <div className="py-8 sm:py-12 text-center border-2 border-dashed border-navy-50 rounded-2xl sm:rounded-3xl text-navy-300 text-[10px] sm:text-sm italic bg-navy-50/20 px-2">
+                      Fila vazia...
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        <div className="space-y-4 pt-6">
+          <div className="flex items-center justify-between gap-4 p-4 bg-navy-50 rounded-2xl border border-navy-100 shadow-inner">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🏃</span>
+              <label className="text-sm font-black text-navy-700 uppercase tracking-wider">Jogadores de linha</label>
+            </div>
+            <select
+              value={outfieldPlayers}
+              onChange={(e) => setOutfieldPlayers(Number(e.target.value))}
+              className="bg-white border-2 border-navy-200 rounded-xl px-4 py-2 text-navy-900 font-black focus:border-brand-500 focus:outline-none transition-all shadow-sm"
+            >
+              {[4, 5, 6, 7, 8, 9, 10].map(n => (
+                <option key={n} value={n}>{n} por time</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex gap-4">
+            <Button
+              variant="ghost"
+              className="flex-1 h-16 rounded-2xl font-bold text-lg"
+              onClick={() => { setView('details'); }}
+            >
+              Voltar
+            </Button>
+            <Button
+              className="flex-[2] h-16 rounded-2xl font-black text-lg shadow-xl shadow-brand-600/20"
+              onClick={() => handleGenerateTeams(selectedMatch)}
+              isLoading={isBalancing}
+              disabled={(selectedMatch.arrivedPlayerIds || []).length < 2}
+            >
+              🚀 Gerar Partida
+            </Button>
+          </div>
+
+          {/* Listagem de Jogos Gerados */}
+          {subMatches.length > 0 && (
+            <div className="mt-8 space-y-6 animate-fade-in-up pb-10">
+              <h4 className="text-xl font-black text-navy-900 flex items-center gap-2">
+                <span className="w-2 h-8 bg-brand-500 rounded-full"></span>
+                Histórico de Jogos
+              </h4>
+
+              <div className="grid grid-cols-1 gap-4">
+                {subMatches.slice().reverse().map((sm) => (
+                  <Card key={sm.id} className={cn("p-0 overflow-hidden border-2 transition-all", sm.finished ? "border-navy-200 opacity-80" : "border-navy-100 shadow-md")}>
+                    <div className={cn("p-3 flex justify-between items-center transition-colors", sm.finished ? "bg-navy-700" : "bg-navy-900")}>
+                      <div className="flex items-center gap-3">
+                        <span className="text-white font-black uppercase tracking-widest text-sm">{sm.name}</span>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        {sm.finished ? (
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-navy-400"></span>
+                            <span className="text-[10px] text-navy-300 font-black uppercase tracking-tighter">Encerrado</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                              <span className="text-[10px] text-navy-300 font-black uppercase tracking-tighter">Em andamento</span>
+                            </div>
+                            {isAdmin && (
+                              <Button
+                                variant="danger"
+                                size="xs"
+                                onClick={() => handleFinishSubMatch(sm.id)}
+                                className="h-7 px-3 text-[10px] font-black uppercase bg-red-600 hover:bg-red-700 border-none shadow-lg shadow-red-900/20"
+                              >
+                                Encerrar Jogo
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="relative">
+                      {/* Placar Centralizado */}
+                      <div className="absolute left-1/2 top-0 -translate-x-1/2 z-10 flex items-center bg-navy-900 rounded-full border-2 border-navy-700 shadow-xl overflow-hidden">
+                        <input
+                          type="number"
+                          className="w-10 h-10 bg-transparent text-white font-black text-center focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-lg"
+                          value={sm.scoreA}
+                          onChange={(e) => handleUpdateSubMatchScore(sm.id, 'A', Number(e.target.value))}
+                          disabled={sm.finished || !isAdmin}
+                        />
+                        <span className="text-navy-400 font-bold px-1 text-xs select-none">x</span>
+                        <input
+                          type="number"
+                          className="w-10 h-10 bg-transparent text-white font-black text-center focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-lg"
+                          value={sm.scoreB}
+                          onChange={(e) => handleUpdateSubMatchScore(sm.id, 'B', Number(e.target.value))}
+                          disabled={sm.finished || !isAdmin}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 divide-x divide-navy-100">
+                        {/* Time A */}
+                        <div
+                          className={cn(
+                            "p-4 space-y-3 transition-colors duration-200",
+                            !sm.finished && dragOverTeam?.subMatchId === sm.id && dragOverTeam?.team === 'A' ? "bg-brand-50/50" : ""
+                          )}
+                          data-drop-zone={!sm.finished ? "A" : undefined}
+                          data-submatch-id={sm.id}
+                          onDragOver={(e) => !sm.finished && handleDragOver(e, sm.id, 'A')}
+                          onDragLeave={() => setDragOverTeam(null)}
+                          onDrop={() => !sm.finished && handleDrop(sm.id, 'A')}
+                        >
+                          <h5 className="text-[10px] font-black text-brand-600 uppercase tracking-[0.2em] mb-4 text-center">Time 1</h5>
+
+                          {/* Slot de Goleiro dedicado */}
+                          <div className="mb-4">
+                            {(() => {
+                              const gk = sm.teamA.find(p => p.position === Position.GOLEIRO);
+                              if (gk) {
+                                return (
+                                  <div
+                                    className={cn(
+                                      "group/player flex items-center justify-between bg-red-50 p-2.5 sm:p-2 rounded-lg border-2 border-red-200 shadow-sm",
+                                      sm.finished ? "opacity-60" : ""
+                                    )}
+                                    draggable={isAdmin && !sm.finished}
+                                    onDragStart={() => !sm.finished && handleDragStart(gk.id, sm.id, 'A')}
+                                    onDragEnd={() => { setDraggingPlayer(null); setDragOverTeam(null); }}
+                                    onTouchStart={(e) => !sm.finished && handleTouchStart(gk.id, sm.id, 'A', e)}
+                                    onTouchMove={handleTouchMove}
+                                    onTouchEnd={handleTouchEnd}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="w-1.5 h-6 rounded-full bg-red-600 shrink-0"></span>
+                                      <span className="text-[11px] sm:text-xs font-black text-red-700 truncate">{gk.nickname || gk.name} (G)</span>
+                                    </div>
+                                    {!sm.finished && isAdmin && (
+                                      <button
+                                        onClick={() => handleRemovePlayerFromSubMatch(sm.id, 'A', gk.id)}
+                                        className="p-1 text-red-400 hover:text-red-600 transition-colors"
+                                      >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              if (sm.finished) return null;
+                              return (
+                                <div className="relative">
+                                  <select
+                                    onChange={(e) => {
+                                      const p = players.find(pl => pl.id === e.target.value);
+                                      if (p) handleAddPlayerToSubMatch(sm.id, 'A', p);
+                                      e.target.value = "";
+                                    }}
+                                    className="w-full text-[10px] font-black text-center bg-red-50 border-2 border-dashed border-red-200 text-red-500 p-2.5 sm:p-2 rounded-lg hover:border-red-400 hover:bg-red-100 transition-all appearance-none cursor-pointer"
+                                    disabled={sm.finished}
+                                  >
+                                    <option value="">+ GOLEIRO</option>
+                                    {players
+                                      .filter(p => p.position === Position.GOLEIRO && (selectedMatch.arrivedPlayerIds || []).includes(p.id))
+                                      .filter(p => !sm.teamA.some(tp => tp.id === p.id) && !sm.teamB.some(tp => tp.id === p.id))
+                                      .map(p => (
+                                        <option key={p.id} value={p.id}>{p.nickname || p.name}</option>
+                                      ))
+                                    }
+                                  </select>
+                                </div>
+                              );
+                            })()}
+                          </div>
+
+                          <div className="space-y-2">
+                            {sm.teamA.filter(p => p.position !== Position.GOLEIRO).map(p => (
+                              <div
+                                key={p.id}
+                                draggable={isAdmin && !sm.finished}
+                                onDragStart={() => !sm.finished && handleDragStart(p.id, sm.id, 'A')}
+                                onDragEnd={() => { setDraggingPlayer(null); setDragOverTeam(null); }}
+                                onTouchStart={(e) => !sm.finished && handleTouchStart(p.id, sm.id, 'A', e)}
+                                onTouchMove={handleTouchMove}
+                                onTouchEnd={handleTouchEnd}
+                                className={cn(
+                                  "group/player flex items-center justify-between bg-white p-2.5 sm:p-2 rounded-lg border border-navy-100 transition-all shadow-sm",
+                                  isAdmin && !sm.finished ? "cursor-grab active:cursor-grabbing touch-none" : "",
+                                  sm.finished ? "opacity-60" : "hover:border-navy-200 hover:shadow-md",
+                                  draggingPlayer?.playerId === p.id ? "opacity-40 scale-95" : ""
+                                )}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className={cn(
+                                    "w-1 h-5 sm:w-1.5 sm:h-6 rounded-full shrink-0",
+                                    p.position === Position.GOLEIRO ? 'bg-red-500' :
+                                      p.position === Position.DEFENSOR ? 'bg-orange-500' :
+                                        p.position === Position.MEIO ? 'bg-blue-500' : 'bg-green-500'
+                                  )}></span>
+                                  <span className="text-[11px] sm:text-xs font-bold text-navy-800 truncate">{p.nickname || p.name}</span>
+                                </div>
+                                {!sm.finished && isAdmin && (
+                                  <button
+                                    onClick={() => handleRemovePlayerFromSubMatch(sm.id, 'A', p.id)}
+                                    className="p-1.5 sm:p-1 text-red-100 group-hover/player:text-red-400 active:text-red-600 hover:text-red-500 transition-all"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                            {/* Botão de adicionar extra (linha) */}
+                            {!sm.finished && isAdmin && (
+                              <div className="relative pt-1 border-t border-navy-50 mt-2">
+                                <select
+                                  onChange={(e) => {
+                                    const p = players.find(pl => pl.id === e.target.value);
+                                    if (p) handleAddPlayerToSubMatch(sm.id, 'A', p);
+                                    e.target.value = "";
+                                  }}
+                                  className="w-full text-[10px] font-bold text-center bg-gray-50 border border-dashed border-gray-200 text-gray-400 p-2 sm:p-1.5 rounded-lg hover:border-brand-300 hover:text-brand-500 transition-all appearance-none cursor-pointer"
+                                >
+                                  <option value="">+ JOGADOR</option>
+                                  {players
+                                    .filter(p => (selectedMatch.arrivedPlayerIds || []).includes(p.id))
+                                    .filter(p => !sm.teamA.some(tp => tp.id === p.id) && !sm.teamB.some(tp => tp.id === p.id))
+                                    .map(p => (
+                                      <option key={p.id} value={p.id}>{p.nickname || p.name} ({p.position})</option>
+                                    ))
+                                  }
+                                </select>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Time B */}
+                        <div
+                          className={cn(
+                            "p-4 space-y-3 transition-colors duration-200",
+                            !sm.finished && dragOverTeam?.subMatchId === sm.id && dragOverTeam?.team === 'B' ? "bg-red-50/50" : ""
+                          )}
+                          data-drop-zone={!sm.finished ? "B" : undefined}
+                          data-submatch-id={sm.id}
+                          onDragOver={(e) => !sm.finished && handleDragOver(e, sm.id, 'B')}
+                          onDragLeave={() => setDragOverTeam(null)}
+                          onDrop={() => !sm.finished && handleDrop(sm.id, 'B')}
+                        >
+                          <h5 className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em] mb-4 text-center">Time 2</h5>
+
+                          {/* Slot de Goleiro dedicado */}
+                          <div className="mb-4">
+                            {(() => {
+                              const gk = sm.teamB.find(p => p.position === Position.GOLEIRO);
+                              if (gk) {
+                                return (
+                                  <div
+                                    className={cn(
+                                      "group/player flex items-center justify-between bg-red-50 p-2.5 sm:p-2 rounded-lg border-2 border-red-200 shadow-sm",
+                                      sm.finished ? "opacity-60" : ""
+                                    )}
+                                    draggable={isAdmin && !sm.finished}
+                                    onDragStart={() => !sm.finished && handleDragStart(gk.id, sm.id, 'B')}
+                                    onDragEnd={() => { setDraggingPlayer(null); setDragOverTeam(null); }}
+                                    onTouchStart={(e) => !sm.finished && handleTouchStart(gk.id, sm.id, 'B', e)}
+                                    onTouchMove={handleTouchMove}
+                                    onTouchEnd={handleTouchEnd}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="w-1.5 h-6 rounded-full bg-red-600 shrink-0"></span>
+                                      <span className="text-[11px] sm:text-xs font-black text-red-700 truncate">{gk.nickname || gk.name} (G)</span>
+                                    </div>
+                                    {!sm.finished && isAdmin && (
+                                      <button
+                                        onClick={() => handleRemovePlayerFromSubMatch(sm.id, 'B', gk.id)}
+                                        className="p-1 text-red-400 hover:text-red-600 transition-colors"
+                                      >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              if (sm.finished) return null;
+                              return (
+                                <div className="relative">
+                                  <select
+                                    onChange={(e) => {
+                                      const p = players.find(pl => pl.id === e.target.value);
+                                      if (p) handleAddPlayerToSubMatch(sm.id, 'B', p);
+                                      e.target.value = "";
+                                    }}
+                                    className="w-full text-[10px] font-black text-center bg-red-50 border-2 border-dashed border-red-200 text-red-500 p-2.5 sm:p-2 rounded-lg hover:border-red-400 hover:bg-red-100 transition-all appearance-none cursor-pointer"
+                                    disabled={sm.finished}
+                                  >
+                                    <option value="">+ GOLEIRO</option>
+                                    {players
+                                      .filter(p => p.position === Position.GOLEIRO && (selectedMatch.arrivedPlayerIds || []).includes(p.id))
+                                      .filter(p => !sm.teamA.some(tp => tp.id === p.id) && !sm.teamB.some(tp => tp.id === p.id))
+                                      .map(p => (
+                                        <option key={p.id} value={p.id}>{p.nickname || p.name}</option>
+                                      ))
+                                    }
+                                  </select>
+                                </div>
+                              );
+                            })()}
+                          </div>
+
+                          <div className="space-y-2">
+                            {sm.teamB.filter(p => p.position !== Position.GOLEIRO).map(p => (
+                              <div
+                                key={p.id}
+                                draggable={isAdmin && !sm.finished}
+                                onDragStart={() => !sm.finished && handleDragStart(p.id, sm.id, 'B')}
+                                onDragEnd={() => { setDraggingPlayer(null); setDragOverTeam(null); }}
+                                onTouchStart={(e) => !sm.finished && handleTouchStart(p.id, sm.id, 'B', e)}
+                                onTouchMove={handleTouchMove}
+                                onTouchEnd={handleTouchEnd}
+                                className={cn(
+                                  "group/player flex items-center justify-between bg-white p-2.5 sm:p-2 rounded-lg border border-navy-100 transition-all shadow-sm",
+                                  isAdmin && !sm.finished ? "cursor-grab active:cursor-grabbing touch-none" : "",
+                                  sm.finished ? "opacity-60" : "hover:border-navy-200 hover:shadow-md",
+                                  draggingPlayer?.playerId === p.id ? "opacity-40 scale-95" : ""
+                                )}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className={cn(
+                                    "w-1 h-5 sm:w-1.5 sm:h-6 rounded-full shrink-0",
+                                    p.position === Position.GOLEIRO ? 'bg-red-500' :
+                                      p.position === Position.DEFENSOR ? 'bg-orange-500' :
+                                        p.position === Position.MEIO ? 'bg-blue-500' : 'bg-green-500'
+                                  )}></span>
+                                  <span className="text-[11px] sm:text-xs font-bold text-navy-800 truncate">{p.nickname || p.name}</span>
+                                </div>
+                                {!sm.finished && isAdmin && (
+                                  <button
+                                    onClick={() => handleRemovePlayerFromSubMatch(sm.id, 'B', p.id)}
+                                    className="p-1.5 sm:p-1 text-red-100 group-hover/player:text-red-400 active:text-red-600 hover:text-red-500 transition-all"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                            {/* Botão de adicionar extra (linha) */}
+                            {!sm.finished && isAdmin && (
+                              <div className="relative pt-1 border-t border-navy-50 mt-2">
+                                <select
+                                  onChange={(e) => {
+                                    const p = players.find(pl => pl.id === e.target.value);
+                                    if (p) handleAddPlayerToSubMatch(sm.id, 'B', p);
+                                    e.target.value = "";
+                                  }}
+                                  className="w-full text-[10px] font-bold text-center bg-gray-50 border border-dashed border-gray-200 text-gray-400 p-2 sm:p-1.5 rounded-lg hover:border-brand-300 hover:text-brand-500 transition-all appearance-none cursor-pointer"
+                                >
+                                  <option value="">+ JOGADOR</option>
+                                  {players
+                                    .filter(p => (selectedMatch.arrivedPlayerIds || []).includes(p.id))
+                                    .filter(p => !sm.teamA.some(tp => tp.id === p.id) && !sm.teamB.some(tp => tp.id === p.id))
+                                    .map(p => (
+                                      <option key={p.id} value={p.id}>{p.nickname || p.name} ({p.position})</option>
+                                    ))
+                                  }
+                                </select>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Mobile Drag Ghost */}
+        {isTouchDragging && draggingPlayer && touchDragPosition && (
+          <div
+            className="fixed pointer-events-none z-[9999] bg-white border-2 border-brand-500 rounded-lg p-2 shadow-2xl flex items-center gap-2"
+            style={{
+              left: touchDragPosition.x,
+              top: touchDragPosition.y,
+              transform: 'translate(-50%, -50%)',
+              width: '180px'
+            }}
+          >
+            {(() => {
+              const p = players.find(pl => pl.id === draggingPlayer.playerId);
+              if (!p) return null;
+              return (
+                <>
+                  <span className={cn(
+                    "w-1.5 h-6 rounded-full shrink-0",
+                    p.position === Position.GOLEIRO ? 'bg-red-500' :
+                      p.position === Position.DEFENSOR ? 'bg-orange-500' :
+                        p.position === Position.MEIO ? 'bg-blue-500' : 'bg-green-500'
+                  )}></span>
+                  <span className="text-xs font-black text-navy-900 truncate">{p.nickname || p.name}</span>
+                </>
+              );
+            })()}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // --- DETAIL VIEW (MANAGEMENT) ---
   if (view === 'details' && selectedMatch) {
@@ -689,7 +1627,13 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => { setView('list'); setIsFinishing(false); setSelectedMatch(null); setPlayerFilter('all'); }}
+          onClick={() => {
+            setView('list');
+            setIsFinishing(false);
+            setSelectedMatch(null);
+            setPlayerFilter('all');
+            setSubMatches([]);
+          }}
           className="flex items-center gap-1 text-navy-500 hover:text-brand-600 pl-0"
           leftIcon={<span className="text-xl">←</span>}
         >
@@ -702,7 +1646,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
             <div className="flex-1">
               <div className="flex justify-between items-start w-full">
                 <div>
-                  <h2 className="text-2xl font-bold text-navy-900 mb-1">Jogo: {selectedMatch.date.split('-').reverse().join('/')}</h2>
+                  <h2 className="text-2xl font-bold text-navy-900 mb-1 pr-20">Jogo: {selectedMatch.date.split('-').reverse().join('/')}</h2>
                   <p className="text-brand-600 font-medium text-lg flex items-center gap-2">
                     <span>⏰ {selectedMatch.time}</span>
                     <span className="w-1.5 h-1.5 bg-navy-300 rounded-full"></span>
@@ -712,15 +1656,25 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                 <button
                   onClick={async () => {
                     const confirmados = players.filter(p => selectedMatch.confirmedPlayerIds.includes(p.id));
-                    const lista = confirmados.map((p, i) => `${i + 1}. ${p.nickname || p.name} ${!p.isMonthlySubscriber && !selectedMatch.paidPlayerIds?.includes(p.id) ? '❌' : '✅'}`).join('\n');
-                    const text = `*FUTEBOL - ${selectedMatch.date.split('-').reverse().join('/')}* ⚽\n📍 Local: ${fieldName}\n⏰ Horário: ${selectedMatch.time}\n💰 Valor: R$ ${costPerPerson.toFixed(2)}\n\n*Confirmados (${selectedMatch.confirmedPlayerIds.length}):*\n${lista}\n\n_Gerado por Futgol App_`;
+                    const listaJogadores = confirmados.map((p, i) => {
+                      const status = (!p.isMonthlySubscriber && !selectedMatch.paidPlayerIds?.includes(p.id)) ? '❌' : '✅';
+                      return `${i + 1}. ${p.nickname || p.name} ${status}`;
+                    }).join('\n');
 
-                    if (navigator.share) {
-                      try { await navigator.share({ title: 'Lista de Presença', text }); } catch (e) { console.log(e); }
-                    } else {
-                      await navigator.clipboard.writeText(text);
-                      alert('Lista copiada para a área de transferência!');
-                    }
+                    const textMessage = [
+                      `*FUTEBOL - ${selectedMatch.date.split('-').reverse().join('/')}* ⚽`,
+                      `📍 *Local:* ${fieldName}`,
+                      `⏰ *Horário:* ${selectedMatch.time}`,
+                      `💰 *Valor:* R$ ${costPerPerson.toFixed(2)}`,
+                      '',
+                      `*Confirmados (${selectedMatch.confirmedPlayerIds.length}):*`,
+                      listaJogadores,
+                      '',
+                      `_Gerado por Futgol App_`
+                    ].join('\n');
+
+                    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(textMessage)}`;
+                    window.open(whatsappUrl, '_blank');
                   }}
                   className="p-2 bg-brand-50 text-brand-600 rounded-xl hover:bg-brand-100 transition-colors flex items-center gap-2 text-sm font-bold shadow-sm border border-brand-100"
                   title="Compartilhar Lista"
@@ -729,6 +1683,29 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                   <span className="hidden sm:inline">Compartilhar</span>
                 </button>
               </div>
+
+              {isAdmin && !selectedMatch.finished && (
+                <div className="mt-6 flex flex-col sm:flex-row gap-3">
+                  <Button
+                    onClick={() => setView('queue')}
+                    leftIcon={<span className="text-xl">{subMatches.length > 0 ? '🎮' : '⚽'}</span>}
+                    className="flex-1 px-8 h-12 shadow-xl shadow-brand-500/20 text-md font-black"
+                  >
+                    {subMatches.length > 0 ? 'Entrar no Jogo' : 'Iniciar Pelada'}
+                  </Button>
+
+                  {subMatches.length > 0 && (
+                    <Button
+                      variant="danger"
+                      onClick={() => setIsFinishing(true)}
+                      leftIcon={<span className="text-xl">🛑</span>}
+                      className="flex-1 px-8 h-12 shadow-xl shadow-red-500/20 text-md font-black"
+                    >
+                      Encerrar Partida
+                    </Button>
+                  )}
+                </div>
+              )}
 
               {!selectedMatch.finished && (
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -878,7 +1855,39 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
             {/* Presence List */}
             <Card>
               <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold text-lg text-navy-900">Lista de Jogadores</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-lg text-navy-900">Lista de Jogadores</h3>
+                  {onRefresh && (
+                    <button
+                      onClick={async () => {
+                        if (onRefresh) {
+                          const data = await onRefresh();
+                          if (data?.matches && selectedMatch) {
+                            const updated = data.matches.find((m: any) => m.id === selectedMatch.id);
+                            if (updated) setSelectedMatch(updated);
+                          }
+                        }
+                      }}
+                      disabled={isLoading}
+                      className="p-1 text-navy-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-all disabled:opacity-50"
+                      title="Atualizar lista"
+                    >
+                      <svg
+                        className={cn("w-4 h-4", isLoading ? "animate-spin" : "")}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                        />
+                      </svg>
+                    </button>
+                  )}
+                </div>
                 {isAdmin && (
                   <Button size="sm" variant="secondary" onClick={async () => {
                     setIsLoadingGuests(true);
@@ -908,15 +1917,22 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                     const canToggle = isAdmin || isMe;
                     const isPaid = selectedMatch.paidPlayerIds?.includes(player.id);
 
+                    const positionColor =
+                      player.position === Position.GOLEIRO ? 'border-l-red-500' :
+                        player.position === Position.DEFENSOR ? 'border-l-orange-500' :
+                          player.position === Position.MEIO ? 'border-l-blue-500' :
+                            'border-l-green-500';
+
                     return (
                       <div
                         key={player.id}
                         className={cn(
-                          "p-3 rounded-xl border transition-all flex items-center justify-between group select-none",
+                          "p-3 rounded-r-xl border border-l-[6px] transition-all flex items-center justify-between group select-none",
                           isMe ? "ring-2 ring-brand-500 border-brand-500 bg-brand-50/50" : "bg-white",
                           isConfirmed
                             ? "border-brand-200 bg-brand-50/30"
-                            : "border-navy-100 hover:border-navy-300"
+                            : "border-navy-100 hover:border-navy-300",
+                          positionColor
                         )}
                       >
                         <div
@@ -932,7 +1948,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                             {isConfirmed && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                           </div>
 
-                          {/* Avatar */}
+                          {/* Avatar 
                           <div className="shrink-0">
                             {player.avatar && !player.avatar.includes('ui-avatars.com') ? (
                               <img src={player.avatar} className="w-8 h-8 rounded-full border border-white shadow-sm object-cover" alt="Avatar" />
@@ -945,7 +1961,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                                 {player.isMonthlySubscriber ? 'M' : player.isGuest ? 'C' : 'A'}
                               </div>
                             )}
-                          </div>
+                          </div> */}
 
                           <div className="min-w-0">
                             <div className="flex items-center gap-1">
@@ -959,20 +1975,28 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                             )}
                             <div className="flex items-center gap-1 mt-0.5">
                               {player.isGuest && <span className="text-[10px] bg-accent-100 text-accent-800 px-1 rounded">Convidado</span>}
-                              <span className="text-xs text-navy-400">{player.position}</span>
+                              <span className={cn(
+                                "text-[9px] uppercase font-bold tracking-tighter truncate px-1 rounded",
+                                player.position === Position.GOLEIRO ? "bg-red-50 text-red-600" :
+                                  player.position === Position.DEFENSOR ? "bg-orange-50 text-orange-600" :
+                                    player.position === Position.MEIO ? "bg-blue-50 text-blue-600" :
+                                      "bg-green-50 text-green-600"
+                              )}>
+                                {player.position}
+                              </span>
                             </div>
                           </div>
                         </div>
 
-                        {/* Payment Action (Only Admin) */}
-                        {isConfirmed && isAdmin && (
+                        {/* Payment Action (Only Admin - No Goleiros) */}
+                        {isConfirmed && isAdmin && player.position !== Position.GOLEIRO && (
                           <div className="ml-2 pl-2 border-l border-navy-200">
                             {player.isMonthlySubscriber ? (
                               <div
                                 title={isMonthlyPaid(player.id) ? 'Mensalidade paga' : 'Mensalidade pendente'}
-                                onClick={() => toggleMonthlyFee(player)}
+                                /*onClick={() => toggleMonthlyFee(player)}*/
                                 className={cn("w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold cursor-pointer transition-transform hover:scale-110",
-                                  isMonthlyPaid(player.id) ? 'bg-purple-100 text-purple-700 ring-1 ring-purple-200' : 'bg-red-50 text-red-500 ring-1 ring-red-200'
+                                  isMonthlyPaid(player.id) ? 'bg-green-100 text-green-700 ring-2 ring-green-400' : 'bg-red-100 text-red-500 ring-2 ring-red-400'
                                 )}
                               >
                                 M
@@ -1000,251 +2024,282 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
               <div className="mt-6 pt-6 border-t border-navy-100 flex flex-col md:flex-row gap-4 items-center justify-between">
                 <p className="text-sm text-navy-500 italic hidden md:block">
                   {isAdmin
-                    ? (confirmedCount < 2 ? "Selecione jogadores para gerar times." : "Pronto para escalar.")
+                    ? "Gerencie a presença e os pagamentos dos jogadores."
                     : "Confirme sua presença para jogar."}
                 </p>
-
-                {/* ADMIN ONLY ACTIONS */}
-                {isAdmin && (
-                  <div className="flex gap-3 w-full md:w-auto">
-                    {/* Button: Generate Teams */}
-                    <Button
-                      onClick={() => handleGenerateTeams(selectedMatch)}
-                      isLoading={isBalancing}
-                      variant="secondary"
-                      className="flex-1 md:flex-none"
-                    >
-                      Escalar Times
-                    </Button>
-
-                    {/* Button: Finish Match */}
-                    <Button
-                      onClick={() => setIsFinishing(true)}
-                      variant="primary"
-                      className="flex-none bg-navy-800 hover:bg-navy-900 text-white shadow-lg"
-                    >
-                      🏁 Encerrar
-                    </Button>
-                  </div>
-                )}
               </div>
             </Card>
 
             {/* Teams Display */}
-            {(selectedMatch.teamA.length > 0 || selectedMatch.teamB.length > 0) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20">
-                <Card className="border-t-4 border-brand-500 shadow-lg">
-                  <h3 className="font-heading font-bold text-brand-700 text-xl mb-4 text-center">Time A (Colete)</h3>
-                  <div className="divide-y divide-navy-50">
-                    {selectedMatch.teamA.map(p => (
-                      <div key={p.id} className="py-2.5 flex justify-between items-center text-sm px-3 hover:bg-navy-50 rounded-xl transition-colors">
-                        <span className="text-navy-900 font-bold flex items-center gap-3 min-w-0">
-                          {p.avatar && !p.avatar.includes('ui-avatars.com') ? (
-                            <img src={p.avatar} className="w-8 h-8 rounded-full border border-white shadow-sm object-cover shrink-0" alt="" />
-                          ) : (
-                            <div className={cn(
-                              "w-8 h-8 rounded-full flex items-center justify-center text-white border border-white shadow-sm font-bold text-[10px] shrink-0",
-                              p.isMonthlySubscriber ? "bg-green-500" :
-                                p.isGuest ? "bg-orange-500" : "bg-blue-500"
-                            )}>
-                              {p.isMonthlySubscriber ? 'M' : p.isGuest ? 'C' : 'A'}
-                            </div>
+            {
+              (selectedMatch.teamA.length > 0 || selectedMatch.teamB.length > 0) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20">
+                  <Card
+                    className={cn(
+                      "border-t-4 border-brand-500 shadow-lg transition-colors duration-200",
+                      dragOverTeam?.subMatchId === selectedMatch.id && dragOverTeam?.team === 'A' ? "bg-brand-50/50" : ""
+                    )}
+                    data-drop-zone="A"
+                    data-submatch-id={selectedMatch.id}
+                    onDragOver={(e) => handleDragOver(e, selectedMatch.id, 'A')}
+                    onDragLeave={() => setDragOverTeam(null)}
+                    onDrop={() => handleDrop(selectedMatch.id, 'A')}
+                  >
+                    <h3 className="font-heading font-bold text-brand-700 text-xl mb-4 text-center">Time A (Colete)</h3>
+                    <div className="divide-y divide-navy-50">
+                      {selectedMatch.teamA.map(p => (
+                        <div
+                          key={p.id}
+                          draggable={isAdmin}
+                          onDragStart={() => handleDragStart(p.id, selectedMatch.id, 'A')}
+                          onDragEnd={() => { setDraggingPlayer(null); setDragOverTeam(null); }}
+                          onTouchStart={(e) => handleTouchStart(p.id, selectedMatch.id, 'A', e)}
+                          onTouchMove={handleTouchMove}
+                          onTouchEnd={handleTouchEnd}
+                          className={cn(
+                            "py-2.5 flex justify-between items-center text-sm px-3 hover:bg-navy-50 rounded-xl transition-all group/player",
+                            isAdmin ? "cursor-grab active:cursor-grabbing touch-none" : "",
+                            draggingPlayer?.playerId === p.id ? "opacity-40 scale-95" : ""
                           )}
-                          <div className="min-w-0">
-                            <div className="truncate">{getDisplayName(p)}</div>
-                            {p.nickname && p.nickname !== p.name && (
-                              <div className="text-[10px] text-navy-400 truncate leading-tight mt-0.5 font-medium">{p.name}</div>
+                        >
+                          <span className="text-navy-900 font-bold flex items-center gap-3 min-w-0 pointer-events-none">
+                            {p.avatar && !p.avatar.includes('ui-avatars.com') ? (
+                              <img src={p.avatar} className="w-8 h-8 rounded-full border border-white shadow-sm object-cover shrink-0" alt="" />
+                            ) : (
+                              <div className={cn(
+                                "w-8 h-8 rounded-full flex items-center justify-center text-white border border-white shadow-sm font-bold text-[10px] shrink-0",
+                                p.isMonthlySubscriber ? "bg-green-500" :
+                                  p.isGuest ? "bg-orange-500" : "bg-blue-500"
+                              )}>
+                                {p.isMonthlySubscriber ? 'M' : p.isGuest ? 'C' : 'A'}
+                              </div>
                             )}
-                          </div>
-                        </span>
-                        <span className="text-navy-400 text-xs font-medium bg-navy-50 px-2 py-1 rounded">{p.position}</span>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-
-                <Card className="border-t-4 border-red-500 shadow-lg">
-                  <h3 className="font-heading font-bold text-red-600 text-xl mb-4 text-center">Time B (Sem Colete)</h3>
-                  <div className="divide-y divide-navy-50">
-                    {selectedMatch.teamB.map(p => (
-                      <div key={p.id} className="py-2.5 flex justify-between items-center text-sm px-3 hover:bg-navy-50 rounded-xl transition-colors">
-                        <span className="text-navy-900 font-bold flex items-center gap-3 min-w-0">
-                          {p.avatar && !p.avatar.includes('ui-avatars.com') ? (
-                            <img src={p.avatar} className="w-8 h-8 rounded-full border border-white shadow-sm object-cover shrink-0" alt="" />
-                          ) : (
-                            <div className={cn(
-                              "w-8 h-8 rounded-full flex items-center justify-center text-white border border-white shadow-sm font-bold text-[10px] shrink-0",
-                              p.isMonthlySubscriber ? "bg-green-500" :
-                                p.isGuest ? "bg-orange-500" : "bg-blue-500"
-                            )}>
-                              {p.isMonthlySubscriber ? 'M' : p.isGuest ? 'C' : 'A'}
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <div className="truncate">{getDisplayName(p)}</div>
-                            {p.nickname && p.nickname !== p.name && (
-                              <div className="text-[10px] text-navy-400 truncate leading-tight mt-0.5 font-medium">{p.name}</div>
-                            )}
-                          </div>
-                        </span>
-                        <span className="text-navy-400 text-xs font-medium bg-navy-50 px-2 py-1 rounded">{p.position}</span>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-
-                {aiReasoning && (
-                  <div className="col-span-full p-4 bg-indigo-50 text-indigo-800 rounded-xl text-sm border border-indigo-100 flex gap-3 items-start animate-fade-in">
-                    <span className="text-xl">🤖</span>
-                    <div><strong className="block mb-1">Análise da IA:</strong> {aiReasoning}</div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Comments Section */}
-            <div className="mt-8">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-navy-800">Mural do Jogo</h3>
-                <button onClick={loadComments} className="text-xs text-brand-600 font-bold hover:underline">Atualizar</button>
-              </div>
-              <Card className="p-4 bg-navy-50/50 border-navy-100 shadow-inner">
-                <div className="flex gap-3 mb-6">
-                  <Input
-                    value={newCommentText}
-                    onChange={(e) => setNewCommentText(e.target.value)}
-                    placeholder="Escreva um comentário..."
-                    className="bg-white"
-                    onKeyDown={(e) => e.key === 'Enter' && submitNewComment()}
-                  />
-                  <Button onClick={submitNewComment} disabled={!newCommentText.trim()} className="shrink-0">
-                    Enviar
-                  </Button>
-                </div>
-
-                {isCommentsLoading ? (
-                  <div className="text-center py-8 text-navy-400">Carregando conversas...</div>
-                ) : (
-                  <div className="space-y-4">
-                    {comments.filter(c => !c.parentId).map(c => {
-                      const author = players.find(p => p.id === c.authorPlayerId);
-                      const replies = comments.filter(r => r.parentId === c.id);
-                      const isMine = c.authorPlayerId === (currentPlayer?.id || currentUser.id);
-                      return (
-                        <div key={c.id} className="group">
-                          <div className={cn("p-3 rounded-2xl relative", isMine ? "bg-brand-50 rounded-tr-none ml-8" : "bg-white rounded-tl-none mr-8 shadow-sm")}>
-                            <div className="flex items-center justify-between mb-1">
-                              <span className={cn("text-xs font-bold", isMine ? "text-brand-700" : "text-navy-700")}>
-                                {author ? (author.nickname || author.name) : 'Jogador'}
-                              </span>
-                              <span className="text-[10px] text-navy-400">{new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                            </div>
-                            <p className="text-sm text-navy-800 leading-relaxed">{c.content}</p>
-
-                            <div className="flex gap-3 mt-2">
-                              <button onClick={() => setReplyOpenMap(prev => ({ ...prev, [c.id]: !prev[c.id] }))} className="text-[10px] font-bold text-navy-400 hover:text-brand-600 transition-colors">Responder</button>
-                              {currentPlayer?.id === c.authorPlayerId && (
-                                <button onClick={() => requestDeleteComment(c.id)} className="text-[10px] font-bold text-red-300 hover:text-red-500 transition-colors">Excluir</button>
+                            <div className="min-w-0">
+                              <div className="truncate">{getDisplayName(p)}</div>
+                              {p.nickname && p.nickname !== p.name && (
+                                <div className="text-[10px] text-navy-400 truncate leading-tight mt-0.5 font-medium">{p.name}</div>
                               )}
                             </div>
-                          </div>
-
-                          {/* Replies */}
-                          {replies.length > 0 && (
-                            <div className="mt-2 pl-4 space-y-2 border-l-2 border-navy-100 ml-4">
-                              {replies.map(r => {
-                                const rauthor = players.find(p => p.id === r.authorPlayerId);
-                                return (
-                                  <div key={r.id} className="bg-white/80 p-2 rounded-lg text-sm">
-                                    <div className="flex justify-between">
-                                      <span className="font-bold text-xs text-navy-700">{rauthor ? (rauthor.nickname || rauthor.name) : 'Jogador'}</span>
-                                      {currentPlayer?.id === r.authorPlayerId && (
-                                        <button onClick={() => requestDeleteComment(r.id)} className="text-[10px] text-red-300 hover:text-red-500">✕</button>
-                                      )}
-                                    </div>
-                                    <p className="text-navy-600 mt-1">{r.content}</p>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )}
-
-                          {replyOpenMap[c.id] && (
-                            <div className="mt-2 ml-8 flex gap-2 animate-fade-in-up">
-                              <Input
-                                value={replyTextMap[c.id] || ''}
-                                onChange={(e) => setReplyTextMap(prev => ({ ...prev, [c.id]: e.target.value }))}
-                                placeholder="Responder..."
-                                className="h-8 text-sm"
-                                autoFocus
-                                onKeyDown={(e) => e.key === 'Enter' && submitReply(c.id)}
-                              />
-                              <Button size="sm" onClick={() => submitReply(c.id)} disabled={!((replyTextMap[c.id] || '').trim())}>→</Button>
-                            </div>
-                          )}
+                          </span>
+                          <span className="text-navy-400 text-xs font-medium bg-navy-50 px-2 py-1 rounded pointer-events-none">{p.position}</span>
                         </div>
-                      );
-                    })}
-                    {comments.filter(c => !c.parentId).length === 0 && (
-                      <div className="text-center py-8 text-navy-300 italic">Nenhuma conversa iniciada.</div>
+                      ))}
+                    </div>
+                  </Card>
+
+                  <Card
+                    className={cn(
+                      "border-t-4 border-red-500 shadow-lg transition-colors duration-200",
+                      dragOverTeam?.subMatchId === selectedMatch.id && dragOverTeam?.team === 'B' ? "bg-red-50/50" : ""
                     )}
-                  </div>
-                )}
-              </Card>
-            </div>
+                    data-drop-zone="B"
+                    data-submatch-id={selectedMatch.id}
+                    onDragOver={(e) => handleDragOver(e, selectedMatch.id, 'B')}
+                    onDragLeave={() => setDragOverTeam(null)}
+                    onDrop={() => handleDrop(selectedMatch.id, 'B')}
+                  >
+                    <h3 className="font-heading font-bold text-red-600 text-xl mb-4 text-center">Time B (Sem Colete)</h3>
+                    <div className="divide-y divide-navy-50">
+                      {selectedMatch.teamB.map(p => (
+                        <div
+                          key={p.id}
+                          draggable={isAdmin}
+                          onDragStart={() => handleDragStart(p.id, selectedMatch.id, 'B')}
+                          onDragEnd={() => { setDraggingPlayer(null); setDragOverTeam(null); }}
+                          onTouchStart={(e) => handleTouchStart(p.id, selectedMatch.id, 'B', e)}
+                          onTouchMove={handleTouchMove}
+                          onTouchEnd={handleTouchEnd}
+                          className={cn(
+                            "py-2.5 flex justify-between items-center text-sm px-3 hover:bg-navy-50 rounded-xl transition-all group/player",
+                            isAdmin ? "cursor-grab active:cursor-grabbing touch-none" : "",
+                            draggingPlayer?.playerId === p.id ? "opacity-40 scale-95" : ""
+                          )}
+                        >
+                          <span className="text-navy-900 font-bold flex items-center gap-3 min-w-0 pointer-events-none">
+                            {p.avatar && !p.avatar.includes('ui-avatars.com') ? (
+                              <img src={p.avatar} className="w-8 h-8 rounded-full border border-white shadow-sm object-cover shrink-0" alt="" />
+                            ) : (
+                              <div className={cn(
+                                "w-8 h-8 rounded-full flex items-center justify-center text-white border border-white shadow-sm font-bold text-[10px] shrink-0",
+                                p.isMonthlySubscriber ? "bg-green-500" :
+                                  p.isGuest ? "bg-orange-500" : "bg-blue-500"
+                              )}>
+                                {p.isMonthlySubscriber ? 'M' : p.isGuest ? 'C' : 'A'}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="truncate">{getDisplayName(p)}</div>
+                              {p.nickname && p.nickname !== p.name && (
+                                <div className="text-[10px] text-navy-400 truncate leading-tight mt-0.5 font-medium">{p.name}</div>
+                              )}
+                            </div>
+                          </span>
+                          <span className="text-navy-400 text-xs font-medium bg-navy-50 px-2 py-1 rounded pointer-events-none">{p.position}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+
+                  {aiReasoning && (
+                    <div className="col-span-full p-4 bg-indigo-50 text-indigo-800 rounded-xl text-sm border border-indigo-100 flex gap-3 items-start animate-fade-in">
+                      <span className="text-xl">🤖</span>
+                      <div><strong className="block mb-1">Análise da IA:</strong> {aiReasoning}</div>
+                    </div>
+                  )}
+                </div>
+              )}
           </>
         )}
 
-        {/* Modal: Finish Match */}
-        {isFinishing && !selectedMatch.finished && isAdmin && (
-          <Modal isOpen={isFinishing} onClose={() => setIsFinishing(false)} title="Encerrar Partida">
-            <div className="space-y-6">
-              <div className="bg-navy-50 p-6 rounded-2xl flex items-center justify-center gap-8">
-                <div className="text-center">
-                  <label className="block text-xs font-bold text-navy-500 mb-2 uppercase tracking-wider">Time A</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={scoreA}
-                    onChange={(e) => setScoreA(Number(e.target.value))}
-                    className="w-20 h-20 text-center text-4xl font-bold bg-white text-brand-600 border-2 border-transparent focus:border-brand-500 rounded-2xl outline-none shadow-sm transition-all"
-                  />
-                </div>
-                <span className="text-3xl font-bold text-navy-200">X</span>
-                <div className="text-center">
-                  <label className="block text-xs font-bold text-navy-500 mb-2 uppercase tracking-wider">Time B</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={scoreB}
-                    onChange={(e) => setScoreB(Number(e.target.value))}
-                    className="w-20 h-20 text-center text-4xl font-bold bg-white text-red-600 border-2 border-transparent focus:border-red-500 rounded-2xl outline-none shadow-sm transition-all"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-navy-700 mb-2">Craque da Partida (MVP) 🏆</label>
-                <select
-                  value={mvpId}
-                  onChange={(e) => setMvpId(e.target.value)}
-                  className="w-full bg-white border border-navy-200 rounded-xl px-4 py-3 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all font-medium appearance-none"
-                >
-                  <option value="">-- Selecione o destaque --</option>
-                  {selectedMatch.confirmedPlayerIds.map(id => {
-                    const p = players.find(player => player.id === id);
-                    return p ? <option key={p.id} value={p.id}>{getDisplayName(p)}</option> : null;
-                  })}
-                </select>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <Button variant="ghost" onClick={() => setIsFinishing(false)} className="flex-1">Cancelar</Button>
-                <Button onClick={handleFinishMatch} className="flex-1" isLoading={isSaving} disabled={isSaving}>Confirmar Resultado</Button>
-              </div>
+        {/* Finished Match History */}
+        {selectedMatch.finished && selectedMatch.subMatches && selectedMatch.subMatches.length > 0 && (
+          <div className="mt-8 space-y-4">
+            <h3 className="text-lg font-bold text-navy-800 flex items-center gap-2">
+              <span className="text-xl">📊</span> Histórico de Jogos
+            </h3>
+            <div className="grid grid-cols-1 gap-4">
+              {selectedMatch.subMatches.map((sm) => (
+                <Card key={sm.id} className="p-0 overflow-hidden border-navy-100 shadow-sm opacity-90">
+                  <div className="bg-navy-700 p-2.5 flex justify-between items-center">
+                    <span className="text-white font-black uppercase tracking-tighter text-xs">{sm.name}</span>
+                    <div className="flex items-center gap-3 bg-navy-800 rounded px-3 py-1">
+                      <span className="text-white font-black text-sm">{sm.scoreA}</span>
+                      <span className="text-navy-400 font-bold text-[10px]">x</span>
+                      <span className="text-white font-black text-sm">{sm.scoreB}</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 divide-x divide-navy-50">
+                    <div className="p-3">
+                      <h5 className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-2 text-center">Time A</h5>
+                      <div className="flex flex-wrap gap-1 justify-center">
+                        {sm.teamA.map(p => (
+                          <span key={p.id} className="text-[9px] font-bold bg-navy-50 text-navy-700 px-1.5 py-0.5 rounded border border-navy-100">
+                            {p.nickname || p.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="p-3">
+                      <h5 className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-2 text-center">Time B</h5>
+                      <div className="flex flex-wrap gap-1 justify-center">
+                        {sm.teamB.map(p => (
+                          <span key={p.id} className="text-[9px] font-bold bg-navy-50 text-navy-700 px-1.5 py-0.5 rounded border border-navy-100">
+                            {p.nickname || p.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
             </div>
-          </Modal>
+          </div>
         )}
+
+        {/* Comments Section */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-navy-800">Comentários</h3>
+            <button onClick={loadComments} className="text-xs text-brand-600 font-bold hover:underline">Atualizar Comentários</button>
+          </div>
+          <Card className="p-4 bg-navy-50/50 border-navy-100 shadow-inner">
+            <div className="flex gap-3 mb-6">
+              <Input
+                value={newCommentText}
+                onChange={(e) => setNewCommentText(e.target.value)}
+                placeholder="Escreva um comentário..."
+                className="bg-white"
+                onKeyDown={(e) => e.key === 'Enter' && submitNewComment()}
+              />
+              <Button onClick={submitNewComment} disabled={!newCommentText.trim()} className="shrink-0">
+                Enviar
+              </Button>
+            </div>
+
+            {isCommentsLoading ? (
+              <div className="text-center py-8 text-navy-400">Carregando conversas...</div>
+            ) : (
+              <div className="space-y-4">
+                {comments.filter(c => !c.parentId).map(c => {
+                  const author = players.find(p => p.id === c.authorPlayerId);
+                  const replies = comments.filter(r => r.parentId === c.id);
+                  const isMine = c.authorPlayerId === (currentPlayer?.id || currentUser.id);
+                  return (
+                    <div key={c.id} className="group">
+                      <div className={cn("p-3 rounded-2xl relative", isMine ? "bg-brand-50 rounded-tr-none ml-8" : "bg-white rounded-tl-none mr-8 shadow-sm")}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={cn("text-xs font-bold", isMine ? "text-brand-700" : "text-navy-700")}>
+                            {author ? (author.nickname || author.name) : 'Jogador'}
+                          </span>
+                          <span className="text-[10px] text-navy-400">{new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <p className="text-sm text-navy-800 leading-relaxed">{c.content}</p>
+
+                        <div className="flex gap-3 mt-2">
+                          <button onClick={() => setReplyOpenMap(prev => ({ ...prev, [c.id]: !prev[c.id] }))} className="text-[10px] font-bold text-navy-400 hover:text-brand-600 transition-colors">Responder</button>
+                          {currentPlayer?.id === c.authorPlayerId && (
+                            <button onClick={() => requestDeleteComment(c.id)} className="text-[10px] font-bold text-red-300 hover:text-red-500 transition-colors">Excluir</button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Replies */}
+                      {replies.length > 0 && (
+                        <div className="mt-2 pl-4 space-y-2 border-l-2 border-navy-100 ml-4">
+                          {replies.map(r => {
+                            const rauthor = players.find(p => p.id === r.authorPlayerId);
+                            return (
+                              <div key={r.id} className="bg-white/80 p-2 rounded-lg text-sm">
+                                <div className="flex justify-between">
+                                  <span className="font-bold text-xs text-navy-700">{rauthor ? (rauthor.nickname || rauthor.name) : 'Jogador'}</span>
+                                  {currentPlayer?.id === r.authorPlayerId && (
+                                    <button onClick={() => requestDeleteComment(r.id)} className="text-[10px] text-red-300 hover:text-red-500">✕</button>
+                                  )}
+                                </div>
+                                <p className="text-navy-600 mt-1">{r.content}</p>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      {replyOpenMap[c.id] && (
+                        <div className="mt-2 ml-8 flex gap-2 animate-fade-in-up">
+                          <Input
+                            value={replyTextMap[c.id] || ''}
+                            onChange={(e) => setReplyTextMap(prev => ({ ...prev, [c.id]: e.target.value }))}
+                            placeholder="Responder..."
+                            className="h-8 text-sm"
+                            autoFocus
+                            onKeyDown={(e) => e.key === 'Enter' && submitReply(c.id)}
+                          />
+                          <Button size="sm" onClick={() => submitReply(c.id)} disabled={!((replyTextMap[c.id] || '').trim())}>→</Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {comments.filter(c => !c.parentId).length === 0 && (
+                  <div className="text-center py-8 text-navy-300 italic">Nenhuma conversa iniciada.</div>
+                )}
+              </div>
+            )}
+          </Card>
+        </div>
+        <Modal isOpen={isFinishing} onClose={() => setIsFinishing(false)} title="Encerrar Partida">
+          <div className="space-y-6">
+            <p className="text-navy-600">
+              Tem certeza que deseja encerrar a pelada de hoje?
+              <br />
+              <span className="text-sm text-navy-400 mt-2 block">Isso finalizará o evento e não permitirá mais sorteios ou alterações de presença.</span>
+            </p>
+
+            <div className="flex gap-3 pt-4">
+              <Button variant="ghost" onClick={() => setIsFinishing(false)} className="flex-1">Voltar</Button>
+              <Button variant="danger" onClick={handleFinishMatch} className="flex-1" isLoading={isSaving} disabled={isSaving}>Sim, Encerrar</Button>
+            </div>
+          </div>
+        </Modal>
 
         {/* Match Delete Confirmation */}
         <Modal isOpen={!!matchToDelete} onClose={() => setMatchToDelete(null)} title="Excluir Jogo">
@@ -1268,7 +2323,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
           </div>
         </Modal>
 
-      </div>
+      </div >
     );
   }
 
@@ -1347,9 +2402,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                     </p>
 
                     {isFinished ? (
-                      <div className="mt-3 inline-flex items-center gap-2 bg-navy-100 px-3 py-1 rounded-full">
-                        <span className="text-xs font-bold text-navy-600 uppercase tracking-widest">Placar</span>
-                        <span className="text-sm font-bold text-navy-900">{match.scoreA} x {match.scoreB}</span>
+                      <div>
                       </div>
                     ) : (
                       <div className="mt-4 flex items-center gap-2">
@@ -1372,22 +2425,24 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                 </div>
 
                 {/* Admin Quick Actions */}
-                {!isFinished && isAdmin && (
-                  <div className="absolute top-2 right-2 flex gap-1 z-20">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleEditMatch(match); }}
-                      className="p-1.5 bg-white rounded-lg shadow-sm border border-navy-100 text-navy-400 hover:text-brand-600 hover:border-brand-200 transition-all"
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setMatchToDelete(match.id); }}
-                      className="p-1.5 bg-white rounded-lg shadow-sm border border-navy-100 text-navy-400 hover:text-red-600 hover:border-red-200 transition-all"
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
-                  </div>
-                )}
+                {
+                  !isFinished && isAdmin && (
+                    <div className="absolute top-2 right-2 flex gap-1 z-20">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleEditMatch(match); }}
+                        className="p-1.5 bg-white rounded-lg shadow-sm border border-navy-100 text-navy-400 hover:text-brand-600 hover:border-brand-200 transition-all"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMatchToDelete(match.id); }}
+                        className="p-1.5 bg-white rounded-lg shadow-sm border border-navy-100 text-navy-400 hover:text-red-600 hover:border-red-200 transition-all"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
+                  )
+                }
               </Card>
             );
           })}
@@ -1405,14 +2460,16 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
       </div>
 
       {/* Floating Action Button (Mobile) */}
-      {isAdmin && (
-        <button
-          onClick={openNewMatchModal}
-          className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-brand-600 text-white rounded-full shadow-lg shadow-brand-600/30 flex items-center justify-center z-40 active:scale-90 transition-transform"
-        >
-          <span className="text-3xl font-light mb-1">+</span>
-        </button>
-      )}
+      {
+        isAdmin && (
+          <button
+            onClick={openNewMatchModal}
+            className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-brand-600 text-white rounded-full shadow-lg shadow-brand-600/30 flex items-center justify-center z-40 active:scale-90 transition-transform"
+          >
+            <span className="text-3xl font-light mb-1">+</span>
+          </button>
+        )
+      }
 
       {/* Modal: Create/Edit Match */}
       <Modal
@@ -1477,6 +2534,6 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
           </Button>
         </div>
       </Modal>
-    </div>
+    </div >
   );
 };

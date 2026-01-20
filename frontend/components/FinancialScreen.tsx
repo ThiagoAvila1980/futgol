@@ -71,10 +71,16 @@ export const FinancialScreen: React.FC<FinancialScreenProps> = ({ activeGroup, p
     message: ''
   });
 
-  const monthlyCandidates = players;
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const selectedMonthPrefix = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+
+  const monthlyCandidates = useMemo(() => {
+    return players.filter(p =>
+      p.isMonthlySubscriber &&
+      (!p.monthlyStartMonth || selectedMonthPrefix >= p.monthlyStartMonth)
+    );
+  }, [players, selectedMonthPrefix]);
 
   // Rótulos amigáveis para as categorias financeiras
   const categoryLabels: Record<string, string> = {
@@ -160,7 +166,7 @@ export const FinancialScreen: React.FC<FinancialScreenProps> = ({ activeGroup, p
 
   const hasPaidSelectedMonth = (playerId: string) => {
     return transactions.some(t =>
-      t.relatedPlayerId === playerId &&
+      (t.relatedPlayerId === playerId || t.paidPlayerIds?.includes(playerId)) &&
       t.category === 'MONTHLY_FEE' &&
       t.date.startsWith(selectedMonthPrefix)
     );
@@ -221,22 +227,19 @@ export const FinancialScreen: React.FC<FinancialScreenProps> = ({ activeGroup, p
     setSuccessId(null);
 
     try {
-      const newTx: Transaction = {
-        id: generateId(),
-        groupId: activeGroup.id,
-        description: `Mensalidade - ${player.nickname || player.name}`,
-        amount: Number(activeGroup.monthlyFee || 0),
-        type: 'INCOME',
-        category: 'MONTHLY_FEE',
-        relatedPlayerId: player.id,
-        date: `${selectedMonthPrefix}-01`
-      };
+      const amountValue = Number(activeGroup.monthlyFee || 0);
+      const paymentDate = `${selectedMonthPrefix}-01`;
 
-      await storage.transactions.save(newTx);
+      await storage.transactions.upsertMonthlyTransaction(
+        activeGroup.id,
+        player.id,
+        amountValue,
+        paymentDate
+      );
 
       // Garantir que o recebimento apareça no histórico se estiver fora do filtro atual
-      if (newTx.date < filterStartDate) setFilterStartDate(newTx.date);
-      if (newTx.date > filterEndDate) setFilterEndDate(newTx.date);
+      if (paymentDate < filterStartDate) setFilterStartDate(paymentDate);
+      if (paymentDate > filterEndDate) setFilterEndDate(paymentDate);
 
       await loadTransactions();
       setSuccessId(player.id);
@@ -410,7 +413,7 @@ export const FinancialScreen: React.FC<FinancialScreenProps> = ({ activeGroup, p
                   <div className="min-w-0 flex-1">
                     <p className="font-bold text-navy-900 truncate" title={tx.description}>{tx.description}</p>
                     <p className="text-xs text-navy-500 flex items-center gap-1 mt-0.5 truncate">
-                      📅 {new Date(tx.date).toLocaleDateString('pt-BR')} • <span className="uppercase text-[10px] font-bold bg-navy-100 text-navy-600 px-1.5 py-0.5 rounded tracking-wide shrink-0">{categoryLabels[tx.category] || tx.category}</span>
+                      📅 {tx.date.split('-').reverse().join('/')} • <span className="uppercase text-[10px] font-bold bg-navy-100 text-navy-600 px-1.5 py-0.5 rounded tracking-wide shrink-0">{categoryLabels[tx.category] || tx.category}</span>
                     </p>
                   </div>
                 </div>
@@ -626,19 +629,14 @@ export const FinancialScreen: React.FC<FinancialScreenProps> = ({ activeGroup, p
             ) : (
               monthlyCandidates.map(p => {
                 const alreadyPaid = hasPaidSelectedMonth(p.id);
-                const eligible = !p.monthlyStartMonth || selectedMonthPrefix >= (p.monthlyStartMonth || '');
                 return (
                   <div key={p.id} className="flex flex-col sm:flex-row justify-between items-center bg-white p-3 rounded-xl border border-navy-100 hover:border-brand-200 hover:shadow-sm transition-all group">
                     <div className="flex items-center gap-3 w-full sm:w-auto mb-2 sm:mb-0">
                       {p.avatar && !p.avatar.includes('ui-avatars.com') ? (
                         <img src={p.avatar} className="w-10 h-10 rounded-full border border-white shadow-sm object-cover" alt="Avatar" />
                       ) : (
-                        <div className={cn(
-                          "w-10 h-10 rounded-full flex items-center justify-center text-white border border-white shadow-sm font-bold text-sm",
-                          p.isMonthlySubscriber ? "bg-green-500" :
-                            p.isGuest ? "bg-orange-500" : "bg-blue-500"
-                        )}>
-                          {p.isMonthlySubscriber ? 'M' : p.isGuest ? 'C' : 'A'}
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white border border-white shadow-sm font-bold text-sm bg-green-500">
+                          M
                         </div>
                       )}
                       <div>
@@ -647,11 +645,7 @@ export const FinancialScreen: React.FC<FinancialScreenProps> = ({ activeGroup, p
                           <span className="text-[10px] text-navy-400 block leading-tight mb-0.5">{p.name}</span>
                         )}
                         <div className="flex items-center gap-2 mt-0.5">
-                          {p.isMonthlySubscriber ? (
-                            <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-1.5 rounded uppercase tracking-wider">Mensalista</span>
-                          ) : (
-                            <span className="text-[10px] text-navy-400">Avulso</span>
-                          )}
+                          <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-1.5 rounded uppercase tracking-wider">Mensalista</span>
                           {p.monthlyStartMonth && (
                             <span className="text-[10px] text-navy-400">Desde: {p.monthlyStartMonth.split('-').reverse().join('/')}</span>
                           )}
@@ -661,13 +655,12 @@ export const FinancialScreen: React.FC<FinancialScreenProps> = ({ activeGroup, p
 
                     <Button
                       size="sm"
-                      disabled={processingId === p.id || successId === p.id || alreadyPaid || !eligible}
+                      disabled={processingId === p.id || successId === p.id || alreadyPaid}
                       onClick={() => handlePayMonthlyFee(p)}
                       variant={alreadyPaid ? "ghost" : "primary"}
                       className={cn(
                         "w-full sm:w-auto min-w-[120px]",
-                        alreadyPaid && "bg-green-50 text-green-700 hover:bg-green-100 cursor-default opacity-100",
-                        !eligible && "opacity-50 cursor-not-allowed bg-gray-50 text-gray-400"
+                        alreadyPaid && "bg-green-50 text-green-700 hover:bg-green-100 cursor-default opacity-100"
                       )}
                     >
                       {processingId === p.id ? (
@@ -676,8 +669,6 @@ export const FinancialScreen: React.FC<FinancialScreenProps> = ({ activeGroup, p
                         <span>✅ Salvo!</span>
                       ) : alreadyPaid ? (
                         <span className="flex items-center gap-1">✅ Pago</span>
-                      ) : !eligible ? (
-                        <span>--</span>
                       ) : (
                         <span>Receber</span>
                       )}

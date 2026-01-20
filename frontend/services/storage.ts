@@ -265,6 +265,9 @@ export const storage = {
     upsertMatchTransaction: async (groupId: string, matchId: string, totalAmount: number, description: string, date: string): Promise<void> => {
       await api.post(`/api/transactions/upsert_match/`, { groupId, matchId, totalAmount, description, date });
     },
+    upsertMonthlyTransaction: async (groupId: string, playerId: string, amount: number, date: string): Promise<void> => {
+      await api.post(`/api/transactions/upsert_monthly/`, { groupId, playerId, amount, date });
+    },
     delete: async (id: string): Promise<void> => {
       await api.delete(`/api/transactions/${encodeURIComponent(id)}/`);
     }

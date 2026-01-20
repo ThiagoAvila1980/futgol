@@ -19,7 +19,8 @@ export default async function (req: any, res: any) {
     date: t.date,
     category: t.category,
     relatedPlayerId: t.related_player_id || undefined,
-    relatedMatchId: t.related_match_id || undefined
+    relatedMatchId: t.related_match_id || undefined,
+    paidPlayerIds: t.paid_player_ids ? t.paid_player_ids.split(',').filter(Boolean) : undefined
   }));
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/json');

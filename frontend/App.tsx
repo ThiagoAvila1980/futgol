@@ -166,7 +166,7 @@ const App: React.FC = () => {
   }, [currentUser, activeGroup]);
 
   const fetchGroupData = async (silent = false) => {
-    if (!activeGroup || !currentUser) return;
+    if (!activeGroup || !currentUser) return null;
     if (!silent) setIsDataLoading(true);
     try {
       const [loadedPlayers, loadedFields, loadedMatches, userGroups] = await Promise.all([
@@ -176,7 +176,7 @@ const App: React.FC = () => {
         storage.groups.getByUser(currentUser.id)
       ]);
 
-      // Check if group details (like admins) changed before updating activeGroup to avoid infinite loop
+      // Check if group details changed before updating activeGroup
       const updatedActive = userGroups.find(g => g.id === activeGroup.id);
       if (updatedActive) {
         const hasAdminsChanged = JSON.stringify(updatedActive.admins) !== JSON.stringify(activeGroup.admins);
@@ -194,10 +194,10 @@ const App: React.FC = () => {
       setFields(loadedFields);
       setMatches(loadedMatches);
 
-      // Process vacancies notifications (silent check)
+      // Process vacancies notifications
       const capacityForSport = (sport?: string) => {
         if (sport === 'Futebol de Campo') return 22;
-        return 14; // Default/Socity/Futsal
+        return 14;
       };
 
       const cap = capacityForSport(activeGroup.sport);
@@ -206,7 +206,6 @@ const App: React.FC = () => {
       loadedMatches.forEach(m => {
         const count = (m.confirmedPlayerIds || []).length;
         const prevCount = prev[m.id] ?? count;
-        // If it was full and someone cancelled, notify
         if (prevCount >= cap && count < cap) {
           const field = loadedFields.find(f => f.id === m.fieldId);
           const label = `${m.date} ${m.time || ''} ${field ? ' - ' + field.name : ''}`.trim();
@@ -214,22 +213,16 @@ const App: React.FC = () => {
         }
         prev[m.id] = count;
       });
+
+      return { players: loadedPlayers, fields: loadedFields, matches: loadedMatches };
     } catch (error) {
       console.error("Erro ao carregar dados do grupo:", error);
+      return null;
     } finally {
       setIsDataLoading(false);
     }
   };
 
-  // Sincronização em segundo plano silenciosa (evita o indicador "Sincronizando" constante)
-  useEffect(() => {
-    if (currentUser && activeGroup) {
-      const intervalId = setInterval(() => {
-        fetchGroupData(true);
-      }, 30000); // A cada 30 segundos é suficiente para background sync
-      return () => clearInterval(intervalId);
-    }
-  }, [currentUser, activeGroup]);
 
   // Handlers para persistência e remoção de dados
   const handlePersistPlayer = async (player: Player) => {
@@ -429,6 +422,7 @@ const App: React.FC = () => {
             currentUser={currentUser!}
             activeGroup={activeGroup!}
             onRefresh={fetchGroupData}
+            isLoading={isDataLoading}
           />
         );
       case 'financial':
@@ -717,7 +711,7 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Desktop Sidebar Navigation */}
+        {/* Mobile Sidebar Navigation */}
         {activeGroup && (
           <div className="hidden md:flex md:flex-col p-4 gap-2 md:flex-1 overflow-y-auto">
             <div className="text-xs font-bold text-navy-500 uppercase tracking-wider px-4 mb-2 mt-4">Menu Principal</div>
@@ -798,7 +792,7 @@ const App: React.FC = () => {
                   currentView === 'players' ? 'Jogadores' :
                     currentView === 'groups' ? 'Meus Grupos' :
                       currentView === 'profile' ? 'Minha Conta' :
-                        currentView === 'financial' ? 'Fluxo de Caixa' : 'Locais'}
+                        currentView === 'financial' ? 'Financeiro' : 'Locais'}
             </h2>
             <p className="text-navy-500 text-sm mt-1 font-medium">
               {currentView === 'dashboard' ? `E ae  ${currentUser.name.split(' ')[0]}! Tudo pronto para o jogo?` :
@@ -893,13 +887,13 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; icon: React.Re
   <button
     onClick={onClick}
     className={`flex flex-col items-center justify-center gap-1 transition-all duration-200 flex-1
-      ${active ? 'text-brand-500 scale-110' : 'text-navy-400'}
+      ${active ? 'text-white scale-110' : 'text-white/60'}
     `}
   >
-    <div className={`p-1.5 rounded-lg transition-colors ${active ? 'bg-brand-500/10' : ''}`}>
+    <div className={`p-1.5 rounded-lg transition-colors ${active ? 'bg-white/10' : ''}`}>
       {icon}
     </div>
-    <span className={`text-[10px] font-bold uppercase tracking-wider ${active ? 'opacity-100' : 'opacity-60'}`}>
+    <span className="text-[10px] font-bold uppercase tracking-wider">
       {label}
     </span>
   </button>

@@ -145,8 +145,9 @@ export async function ensureSchema() {
     finished INTEGER,
     mvp_id TEXT               -- Now stores Player ID
   );`);
-  await sql(`CREATE INDEX IF NOT EXISTS idx_matches_group_id ON matches(group_id)`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_matches_date ON matches(date)`);
+  await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS arrived_player_ids TEXT`);
+  await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS sub_matches TEXT`);
 
   // 6. Transactions
   await sql(`CREATE TABLE IF NOT EXISTS transactions(
@@ -163,6 +164,7 @@ export async function ensureSchema() {
   await sql(`CREATE INDEX IF NOT EXISTS idx_transactions_group_id ON transactions(group_id)`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)`);
   await sql(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS related_player_id TEXT REFERENCES players(id) ON DELETE SET NULL`);
+  await sql(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS paid_player_ids TEXT`);
 
   // 7. Comments
   await sql(`CREATE TABLE IF NOT EXISTS comments(

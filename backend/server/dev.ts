@@ -25,6 +25,7 @@ import groupsMembers from '../api/groups/[id]/members';
 import transactionsIndex from '../api/transactions';
 import transactionsId from '../api/transactions/[id]';
 import transactionsUpsertMatch from '../api/transactions/upsert_match';
+import transactionsUpsertMonthly from '../api/transactions/upsert_monthly';
 import groupsRequestJoin from '../api/groups/[id]/request_join';
 import groupsPromoteMember from '../api/groups/[id]/promote_member';
 import groupsDemoteMember from '../api/groups/[id]/demote_member';
@@ -147,6 +148,8 @@ app.delete('/api/transactions/:id', transactionsId);
 app.delete('/api/transactions/:id/', transactionsId);
 app.post('/api/transactions/upsert_match', transactionsUpsertMatch);
 app.post('/api/transactions/upsert_match/', transactionsUpsertMatch);
+app.post('/api/transactions/upsert_monthly', transactionsUpsertMonthly);
+app.post('/api/transactions/upsert_monthly/', transactionsUpsertMonthly);
 
 const frontendDist = path.resolve(process.cwd(), '../frontend/dist');
 app.use(express.static(frontendDist));

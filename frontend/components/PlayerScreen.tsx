@@ -109,6 +109,9 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const phoneInputRef = useRef<HTMLInputElement>(null);
+  const nicknameInputRef = useRef<HTMLInputElement>(null);
+  const monthlyStartMonthRef = useRef<HTMLInputElement>(null);
 
   const isOwner = activeGroup.adminId === currentUser.id;
   const isAdmin = isOwner || (activeGroup.admins?.includes(currentUser.id));
@@ -291,6 +294,11 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
     setEditingId(null);
     setFoundGlobalUser(null);
     setIsModalOpen(true);
+
+    // Auto-focus no campo de celular ao abrir
+    setTimeout(() => {
+      phoneInputRef.current?.focus();
+    }, 100);
   };
 
   // Salva ou atualiza um jogador no banco de dados
@@ -298,9 +306,29 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
     e.preventDefault();
     if (isSaving) return; // Prevent double click
 
-    // Validation for new member: MUST have at least phone and name
-    if (!editingId && !foundGlobalUser && (!phone || !name)) {
-      alert("Por favor, preencha o celular e o nome do jogador primeiro.");
+    // Validation for member: MUST have at least phone and name
+    if (!editingId && !foundGlobalUser) {
+      if (!phone.trim()) {
+        alert("Por favor, preencha o celular do jogador.");
+        phoneInputRef.current?.focus();
+        return;
+      }
+      if (!name.trim()) {
+        alert("Por favor, preencha o nome completo do jogador.");
+        nameInputRef.current?.focus();
+        return;
+      }
+    }
+
+    if (!nickname.trim()) {
+      alert("Por favor, preencha o apelido do jogador.");
+      nicknameInputRef.current?.focus();
+      return;
+    }
+
+    if (isMonthlySubscriber && !monthlyStartMonth) {
+      alert("Por favor, informe o mês de início da mensalidade.");
+      monthlyStartMonthRef.current?.focus();
       return;
     }
 
@@ -772,6 +800,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
               </label>
               <div className="max-w-[240px]">
                 <PhoneInput
+                  ref={phoneInputRef}
                   placeholder="(00) 00000-0000"
                   value={phone}
                   onChange={setPhone}
@@ -872,6 +901,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
 
             <div className="md:col-span-1">
               <Input
+                ref={nicknameInputRef}
                 label="Apelido no Grupo"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
@@ -983,6 +1013,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
                 <div className="animate-in slide-in-from-left-2 duration-200 pl-4 border-l-2 border-brand-200 space-y-2">
                   <label className="block text-[10px] font-black text-brand-600 uppercase tracking-widest">Mês de Início das Cobranças</label>
                   <Input
+                    ref={monthlyStartMonthRef}
                     type="month"
                     value={monthlyStartMonth}
                     onChange={(e) => setMonthlyStartMonth(e.target.value)}
