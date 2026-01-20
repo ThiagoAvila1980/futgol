@@ -39,6 +39,8 @@ export interface Player {
   isMonthlySubscriber?: boolean; // New: Is this player a monthly payer?
   monthlyStartMonth?: string; // YYYY-MM from when monthly starts
   isGuest?: boolean; // New: Guest profile without linked user
+  goals?: number;
+  assists?: number;
 }
 
 export interface Comment {
@@ -95,6 +97,8 @@ export interface SubMatch {
   scoreA: number;
   scoreB: number;
   finished: boolean;
+  goals?: Record<string, number>; // playerId -> count
+  assists?: Record<string, number>; // playerId -> count
 }
 
 export interface Match {

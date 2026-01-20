@@ -374,7 +374,7 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
           <section className="bg-gradient-to-br from-navy-300/90 via-white to-white -mx-4 md:-mx-6 px-4 md:px-6 py-10 rounded-[2.5rem] border border-navy-100/30 space-y-8 shadow-sm">
             <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-6">
               <div>
-                <h3 className="font-heading font-black text-navy-900 text-2xl flex items-center gap-3">
+                <h3 className="font-heading font-black text-navy-900 text-2xl flex items-center gap-2">
                   <span className="bg-accent-100 text-accent-700 p-2 rounded-xl text-lg shadow-sm">🌍</span>
                   Explorar Comunidade
                 </h3>
@@ -384,14 +384,14 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
               {/* Search Bars */}
               <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
                 <Input
-                  className="w-full md:w-64 shadow-sm"
+                  className="w-full md:w-74 shadow-sm"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Buscar por nome ou esporte..."
                   icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>}
                 />
                 <CityInput
-                  className="w-full md:w-64 shadow-sm"
+                  className="w-full md:w-84 shadow-sm"
                   value={cityFilter}
                   onChange={setCityFilter}
                   placeholder="Filtrar por cidade..."

@@ -73,6 +73,8 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
   const [dragOverTeam, setDragOverTeam] = useState<{ subMatchId: string, team: 'A' | 'B' } | null>(null);
   const [touchDragPosition, setTouchDragPosition] = useState<{ x: number, y: number } | null>(null);
   const [isTouchDragging, setIsTouchDragging] = useState(false);
+  const [activeSubMatchMenuId, setActiveSubMatchMenuId] = useState<string | null>(null);
+  const [activePlayerMenu, setActivePlayerMenu] = useState<{ subMatchId: string, playerId: string } | null>(null);
 
   // Confirmação de Exclusão e Busca de Convidados
   const [matchToDelete, setMatchToDelete] = useState<string | null>(null);
@@ -131,7 +133,8 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
       const aggregate = txs.find(t => t.category === 'MONTHLY_FEE' && !t.relatedPlayerId && (t.date || '').slice(0, 7) === m && (t.description || '').toLowerCase().includes('mensalistas'));
       setMonthlyAggregateId(aggregate ? aggregate.id : null);
 
-      await syncMonthlyAggregate(Object.keys(map).length);
+      // REMOVIDO: syncMonthlyAggregate não deve ser chamado no load (gera transação automática indesejada)
+      // await syncMonthlyAggregate(Object.keys(map).length);
     } catch {
       setMonthlyTxMap({});
       setMonthlyAggregateId(null);
@@ -737,13 +740,79 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
   };
 
   const handleFinishSubMatch = async (subMatchId: string) => {
-    if (!selectedMatch) return;
+    if (!selectedMatch || !window.confirm('Deseja realmente encerrar este jogo?')) {
+      setActiveSubMatchMenuId(null);
+      return;
+    }
     const newSubMatches = subMatches.map(sm =>
       sm.id === subMatchId ? { ...sm, finished: true } : sm
     );
     setSubMatches(newSubMatches);
     const updatedMatch = { ...selectedMatch, subMatches: newSubMatches };
     await onSave(updatedMatch);
+    setActiveSubMatchMenuId(null);
+  };
+
+  const handleCancelSubMatch = async (subMatchId: string) => {
+    if (!selectedMatch || !window.confirm('Tem certeza que deseja cancelar (excluir) este jogo?')) {
+      setActiveSubMatchMenuId(null);
+      return;
+    }
+    const newSubMatches = subMatches.filter(sm => sm.id !== subMatchId);
+    setSubMatches(newSubMatches);
+    const updatedMatch = { ...selectedMatch, subMatches: newSubMatches };
+    await onSave(updatedMatch);
+    setActiveSubMatchMenuId(null);
+  };
+
+  const handleReactivateSubMatch = async (subMatchId: string) => {
+    if (!selectedMatch) return;
+    const newSubMatches = subMatches.map(sm =>
+      sm.id === subMatchId ? { ...sm, finished: false } : sm
+    );
+    setSubMatches(newSubMatches);
+    const updatedMatch = { ...selectedMatch, subMatches: newSubMatches };
+    await onSave(updatedMatch);
+    setActiveSubMatchMenuId(null);
+  };
+
+  const handleUpdatePlayerGoals = async (subMatchId: string, playerId: string, team: 'A' | 'B', delta: number) => {
+    if (!selectedMatch) return;
+    const newSubMatches = subMatches.map(sm => {
+      if (sm.id !== subMatchId) return sm;
+      const goals = { ...(sm.goals || {}) };
+      const currentGoals = goals[playerId] || 0;
+      const nextGoals = Math.max(0, currentGoals + delta);
+
+      if (nextGoals === currentGoals) return sm;
+
+      goals[playerId] = nextGoals;
+
+      return {
+        ...sm,
+        goals,
+        scoreA: team === 'A' ? Math.max(0, sm.scoreA + delta) : sm.scoreA,
+        scoreB: team === 'B' ? Math.max(0, sm.scoreB + delta) : sm.scoreB,
+      };
+    });
+    setSubMatches(newSubMatches);
+    await onSave({ ...selectedMatch, subMatches: newSubMatches });
+  };
+
+  const handleUpdatePlayerAssists = async (subMatchId: string, playerId: string, delta: number) => {
+    const newSubMatches = subMatches.map(sm => {
+      if (sm.id !== subMatchId) return sm;
+      const assists = { ...(sm.assists || {}) };
+      const currentAssists = assists[playerId] || 0;
+      const nextAssists = Math.max(0, currentAssists + delta);
+
+      if (nextAssists === currentAssists && delta !== 0) return sm;
+
+      assists[playerId] = nextAssists;
+      return { ...sm, assists };
+    });
+    setSubMatches(newSubMatches);
+    await onSave({ ...selectedMatch, subMatches: newSubMatches });
   };
 
   const handleRemovePlayerFromSubMatch = async (subMatchId: string, team: 'A' | 'B', playerId: string) => {
@@ -762,6 +831,24 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
 
   const handleAddPlayerToSubMatch = async (subMatchId: string, team: 'A' | 'B', player: Player) => {
     if (!selectedMatch) return;
+
+    // Verificar se o time já está completo
+    const targetSM = subMatches.find(sm => sm.id === subMatchId);
+    if (targetSM) {
+      const currentTeam = team === 'A' ? targetSM.teamA : targetSM.teamB;
+      if (player.position !== Position.GOLEIRO) {
+        const linePlayers = currentTeam.filter(p => p.position !== Position.GOLEIRO);
+        if (linePlayers.length >= outfieldPlayers) {
+          return;
+        }
+      } else {
+        const hasGoleiro = currentTeam.some(p => p.position === Position.GOLEIRO);
+        if (hasGoleiro) {
+          return;
+        }
+      }
+    }
+
     const newSubMatches = subMatches.map(sm => {
       if (sm.id !== subMatchId) return sm;
       if (sm.teamA.some(p => p.id === player.id) || sm.teamB.some(p => p.id === player.id)) return sm;
@@ -802,6 +889,22 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
         return;
       }
 
+      // Validar limite ao mover para o outro time
+      if (draggingPlayer.fromTeam !== toTeam) {
+        const targetTeam = toTeam === 'A' ? selectedMatch.teamA : selectedMatch.teamB;
+        if (player.position !== Position.GOLEIRO) {
+          if (targetTeam.filter(p => p.position !== Position.GOLEIRO).length >= outfieldPlayers) {
+            setDraggingPlayer(null);
+            setDragOverTeam(null);
+            return;
+          }
+        } else if (targetTeam.some(p => p.position === Position.GOLEIRO)) {
+          setDraggingPlayer(null);
+          setDragOverTeam(null);
+          return;
+        }
+      }
+
       const newTeamA = draggingPlayer.fromTeam === 'A'
         ? selectedMatch.teamA.filter(p => p.id !== draggingPlayer.playerId)
         : [...selectedMatch.teamA, player];
@@ -817,11 +920,26 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
       return;
     }
 
+    let blocked = false;
     const newSubMatches = subMatches.map(sm => {
       if (sm.id !== subMatchId) return sm;
 
       const player = (draggingPlayer.fromTeam === 'A' ? sm.teamA : sm.teamB).find(p => p.id === draggingPlayer.playerId);
       if (!player) return sm;
+
+      // Validar limite ao mover para o outro time dentro de uma subpartida
+      if (draggingPlayer.fromTeam !== toTeam) {
+        const targetTeam = toTeam === 'A' ? sm.teamA : sm.teamB;
+        if (player.position !== Position.GOLEIRO) {
+          if (targetTeam.filter(p => p.position !== Position.GOLEIRO).length >= outfieldPlayers) {
+            blocked = true;
+            return sm;
+          }
+        } else if (targetTeam.some(p => p.position === Position.GOLEIRO)) {
+          blocked = true;
+          return sm;
+        }
+      }
 
       const newTeamA = draggingPlayer.fromTeam === 'A'
         ? sm.teamA.filter(p => p.id !== draggingPlayer.playerId)
@@ -833,6 +951,12 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
 
       return { ...sm, teamA: newTeamA, teamB: newTeamB };
     });
+
+    if (blocked) {
+      setDraggingPlayer(null);
+      setDragOverTeam(null);
+      return;
+    }
 
     setSubMatches(newSubMatches);
     if (selectedMatch) {
@@ -1213,29 +1337,62 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                             <span className="text-[10px] text-navy-300 font-black uppercase tracking-tighter">Encerrado</span>
                           </div>
                         ) : (
-                          <>
-                            <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                              <span className="text-[10px] text-navy-300 font-black uppercase tracking-tighter">Em andamento</span>
-                            </div>
-                            {isAdmin && (
-                              <Button
-                                variant="danger"
-                                size="xs"
-                                onClick={() => handleFinishSubMatch(sm.id)}
-                                className="h-7 px-3 text-[10px] font-black uppercase bg-red-600 hover:bg-red-700 border-none shadow-lg shadow-red-900/20"
-                              >
-                                Encerrar Jogo
-                              </Button>
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                            <span className="text-[10px] text-navy-300 font-black uppercase tracking-tighter">Em andamento</span>
+                          </div>
+                        )}
+
+                        {isAdmin && (
+                          <div className="relative">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveSubMatchMenuId(activeSubMatchMenuId === sm.id ? null : sm.id);
+                              }}
+                              className="p-1 hover:bg-white/10 rounded-full transition-colors text-white"
+                            >
+                              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                              </svg>
+                            </button>
+
+                            {activeSubMatchMenuId === sm.id && (
+                              <>
+                                <div className="fixed inset-0 z-40" onClick={() => setActiveSubMatchMenuId(null)} />
+                                <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-2xl border border-navy-100 z-50 overflow-hidden py-1 animate-fade-in">
+                                  {!sm.finished ? (
+                                    <button
+                                      onClick={() => handleFinishSubMatch(sm.id)}
+                                      className="w-full px-4 py-2 text-left text-sm font-bold text-navy-700 hover:bg-navy-50 flex items-center gap-2"
+                                    >
+                                      🏁 Encerrar Jogo
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleReactivateSubMatch(sm.id)}
+                                      className="w-full px-4 py-2 text-left text-sm font-bold text-navy-700 hover:bg-navy-50 flex items-center gap-2"
+                                    >
+                                      🔄 Reativar Jogo
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleCancelSubMatch(sm.id)}
+                                    className="w-full px-4 py-2 text-left text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                  >
+                                    🗑️ Cancelar Jogo
+                                  </button>
+                                </div>
+                              </>
                             )}
-                          </>
+                          </div>
                         )}
                       </div>
                     </div>
 
                     <div className="relative">
                       {/* Placar Centralizado */}
-                      <div className="absolute left-1/2 top-0 -translate-x-1/2 z-10 flex items-center bg-navy-900 rounded-full border-2 border-navy-700 shadow-xl overflow-hidden">
+                      <div className="absolute left-1/2 top-0.5 -translate-x-1/2 z-10 flex items-center bg-navy-900 rounded-full border-1 border-navy-700 shadow-xl overflow-hidden">
                         <input
                           type="number"
                           className="w-10 h-10 bg-transparent text-white font-black text-center focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-lg"
@@ -1290,14 +1447,57 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                                       <span className="w-1.5 h-6 rounded-full bg-red-600 shrink-0"></span>
                                       <span className="text-[11px] sm:text-xs font-black text-red-700 truncate">{gk.nickname || gk.name} (G)</span>
                                     </div>
-                                    {!sm.finished && isAdmin && (
-                                      <button
-                                        onClick={() => handleRemovePlayerFromSubMatch(sm.id, 'A', gk.id)}
-                                        className="p-1 text-red-400 hover:text-red-600 transition-colors"
-                                      >
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                      </button>
-                                    )}
+                                    <div className="flex items-center gap-1">
+                                      {sm.goals?.[gk.id] && (
+                                        <span className="text-[10px] font-black text-brand-600 bg-brand-50 px-1 rounded flex items-center gap-0.5">
+                                          ⚽ {sm.goals[gk.id]}
+                                        </span>
+                                      )}
+                                      {sm.assists?.[gk.id] && (
+                                        <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-1 rounded flex items-center gap-0.5">
+                                          👟 {sm.assists[gk.id]}
+                                        </span>
+                                      )}
+                                      {!sm.finished && isAdmin && (
+                                        <div className="relative">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setActivePlayerMenu(activePlayerMenu?.playerId === gk.id ? null : { subMatchId: sm.id, playerId: gk.id });
+                                            }}
+                                            className="p-1 text-navy-400 hover:text-navy-600 transition-colors"
+                                          >
+                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                              <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                                            </svg>
+                                          </button>
+                                          {activePlayerMenu?.playerId === gk.id && activePlayerMenu?.subMatchId === sm.id && (
+                                            <>
+                                              <div className="fixed inset-0 z-40" onClick={() => setActivePlayerMenu(null)} />
+                                              <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-xl border border-navy-100 z-50 overflow-hidden py-1">
+                                                <div className="w-full px-3 py-1.5 flex items-center justify-between border-b border-navy-50">
+                                                  <span className="text-xs font-bold text-navy-700">⚽ Gol</span>
+                                                  <div className="flex items-center gap-2">
+                                                    <button onClick={() => handleUpdatePlayerGoals(sm.id, gk.id, 'A', -1)} className="w-5 h-5 flex items-center justify-center bg-navy-50 rounded text-navy-600 hover:bg-navy-100 transition-colors">-</button>
+                                                    <span className="text-[10px] font-black text-navy-900 min-w-[12px] text-center">{sm.goals?.[gk.id] || 0}</span>
+                                                    <button onClick={() => handleUpdatePlayerGoals(sm.id, gk.id, 'A', 1)} className="w-5 h-5 flex items-center justify-center bg-brand-50 rounded text-brand-600 hover:bg-brand-100 transition-colors">+</button>
+                                                  </div>
+                                                </div>
+                                                <div className="w-full px-3 py-1.5 flex items-center justify-between border-b border-navy-50">
+                                                  <span className="text-xs font-bold text-navy-700">👟 Assist.</span>
+                                                  <div className="flex items-center gap-2">
+                                                    <button onClick={() => handleUpdatePlayerAssists(sm.id, gk.id, -1)} className="w-5 h-5 flex items-center justify-center bg-navy-50 rounded text-navy-600 hover:bg-navy-100 transition-colors">-</button>
+                                                    <span className="text-[10px] font-black text-navy-900 min-w-[12px] text-center">{sm.assists?.[gk.id] || 0}</span>
+                                                    <button onClick={() => handleUpdatePlayerAssists(sm.id, gk.id, 1)} className="w-5 h-5 flex items-center justify-center bg-blue-50 rounded text-blue-600 hover:bg-blue-100 transition-colors">+</button>
+                                                  </div>
+                                                </div>
+                                                <button onClick={() => handleRemovePlayerFromSubMatch(sm.id, 'A', gk.id)} className="w-full px-3 py-1.5 text-left text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-navy-50">❌ Remover</button>
+                                              </div>
+                                            </>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 );
                               }
@@ -1353,14 +1553,57 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                                   )}></span>
                                   <span className="text-[11px] sm:text-xs font-bold text-navy-800 truncate">{p.nickname || p.name}</span>
                                 </div>
-                                {!sm.finished && isAdmin && (
-                                  <button
-                                    onClick={() => handleRemovePlayerFromSubMatch(sm.id, 'A', p.id)}
-                                    className="p-1.5 sm:p-1 text-red-100 group-hover/player:text-red-400 active:text-red-600 hover:text-red-500 transition-all"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                  </button>
-                                )}
+                                <div className="flex items-center gap-1">
+                                  {sm.goals?.[p.id] && (
+                                    <span className="text-[10px] font-black text-brand-600 bg-brand-50 px-1 rounded flex items-center gap-0.5">
+                                      ⚽ {sm.goals[p.id]}
+                                    </span>
+                                  )}
+                                  {sm.assists?.[p.id] && (
+                                    <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-1 rounded flex items-center gap-0.5">
+                                      👟 {sm.assists[p.id]}
+                                    </span>
+                                  )}
+                                  {!sm.finished && isAdmin && (
+                                    <div className="relative">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActivePlayerMenu(activePlayerMenu?.playerId === p.id ? null : { subMatchId: sm.id, playerId: p.id });
+                                        }}
+                                        className="p-1 text-navy-400 hover:text-navy-600 transition-colors"
+                                      >
+                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                          <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                                        </svg>
+                                      </button>
+                                      {activePlayerMenu?.playerId === p.id && activePlayerMenu?.subMatchId === sm.id && (
+                                        <>
+                                          <div className="fixed inset-0 z-40" onClick={() => setActivePlayerMenu(null)} />
+                                          <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-xl border border-navy-100 z-50 overflow-hidden py-1">
+                                            <div className="w-full px-3 py-1.5 flex items-center justify-between border-b border-navy-50">
+                                              <span className="text-xs font-bold text-navy-700">⚽ Gol</span>
+                                              <div className="flex items-center gap-2">
+                                                <button onClick={() => handleUpdatePlayerGoals(sm.id, p.id, 'A', -1)} className="w-5 h-5 flex items-center justify-center bg-navy-50 rounded text-navy-600 hover:bg-navy-100 transition-colors">-</button>
+                                                <span className="text-[10px] font-black text-navy-900 min-w-[12px] text-center">{sm.goals?.[p.id] || 0}</span>
+                                                <button onClick={() => handleUpdatePlayerGoals(sm.id, p.id, 'A', 1)} className="w-5 h-5 flex items-center justify-center bg-brand-50 rounded text-brand-600 hover:bg-brand-100 transition-colors">+</button>
+                                              </div>
+                                            </div>
+                                            <div className="w-full px-3 py-1.5 flex items-center justify-between border-b border-navy-50">
+                                              <span className="text-xs font-bold text-navy-700">👟 Assist.</span>
+                                              <div className="flex items-center gap-2">
+                                                <button onClick={() => handleUpdatePlayerAssists(sm.id, p.id, -1)} className="w-5 h-5 flex items-center justify-center bg-navy-50 rounded text-navy-600 hover:bg-navy-100 transition-colors">-</button>
+                                                <span className="text-[10px] font-black text-navy-900 min-w-[12px] text-center">{sm.assists?.[p.id] || 0}</span>
+                                                <button onClick={() => handleUpdatePlayerAssists(sm.id, p.id, 1)} className="w-5 h-5 flex items-center justify-center bg-blue-50 rounded text-blue-600 hover:bg-blue-100 transition-colors">+</button>
+                                              </div>
+                                            </div>
+                                            <button onClick={() => handleRemovePlayerFromSubMatch(sm.id, 'A', p.id)} className="w-full px-3 py-1.5 text-left text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-navy-50">❌ Remover</button>
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             ))}
                             {/* Botão de adicionar extra (linha) */}
@@ -1424,14 +1667,57 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                                       <span className="w-1.5 h-6 rounded-full bg-red-600 shrink-0"></span>
                                       <span className="text-[11px] sm:text-xs font-black text-red-700 truncate">{gk.nickname || gk.name} (G)</span>
                                     </div>
-                                    {!sm.finished && isAdmin && (
-                                      <button
-                                        onClick={() => handleRemovePlayerFromSubMatch(sm.id, 'B', gk.id)}
-                                        className="p-1 text-red-400 hover:text-red-600 transition-colors"
-                                      >
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                      </button>
-                                    )}
+                                    <div className="flex items-center gap-1">
+                                      {sm.goals?.[gk.id] && (
+                                        <span className="text-[10px] font-black text-brand-600 bg-brand-50 px-1 rounded flex items-center gap-0.5">
+                                          ⚽ {sm.goals[gk.id]}
+                                        </span>
+                                      )}
+                                      {sm.assists?.[gk.id] && (
+                                        <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-1 rounded flex items-center gap-0.5">
+                                          👟 {sm.assists[gk.id]}
+                                        </span>
+                                      )}
+                                      {!sm.finished && isAdmin && (
+                                        <div className="relative">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setActivePlayerMenu(activePlayerMenu?.playerId === gk.id ? null : { subMatchId: sm.id, playerId: gk.id });
+                                            }}
+                                            className="p-1 text-navy-400 hover:text-navy-600 transition-colors"
+                                          >
+                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                              <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                                            </svg>
+                                          </button>
+                                          {activePlayerMenu?.playerId === gk.id && activePlayerMenu?.subMatchId === sm.id && (
+                                            <>
+                                              <div className="fixed inset-0 z-40" onClick={() => setActivePlayerMenu(null)} />
+                                              <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-xl border border-navy-100 z-50 overflow-hidden py-1">
+                                                <div className="w-full px-3 py-1.5 flex items-center justify-between border-b border-navy-50">
+                                                  <span className="text-xs font-bold text-navy-700">⚽ Gol</span>
+                                                  <div className="flex items-center gap-2">
+                                                    <button onClick={() => handleUpdatePlayerGoals(sm.id, gk.id, 'B', -1)} className="w-5 h-5 flex items-center justify-center bg-navy-50 rounded text-navy-600 hover:bg-navy-100 transition-colors">-</button>
+                                                    <span className="text-[10px] font-black text-navy-900 min-w-[12px] text-center">{sm.goals?.[gk.id] || 0}</span>
+                                                    <button onClick={() => handleUpdatePlayerGoals(sm.id, gk.id, 'B', 1)} className="w-5 h-5 flex items-center justify-center bg-brand-50 rounded text-brand-600 hover:bg-brand-100 transition-colors">+</button>
+                                                  </div>
+                                                </div>
+                                                <div className="w-full px-3 py-1.5 flex items-center justify-between border-b border-navy-50">
+                                                  <span className="text-xs font-bold text-navy-700">👟 Assist.</span>
+                                                  <div className="flex items-center gap-2">
+                                                    <button onClick={() => handleUpdatePlayerAssists(sm.id, gk.id, -1)} className="w-5 h-5 flex items-center justify-center bg-navy-50 rounded text-navy-600 hover:bg-navy-100 transition-colors">-</button>
+                                                    <span className="text-[10px] font-black text-navy-900 min-w-[12px] text-center">{sm.assists?.[gk.id] || 0}</span>
+                                                    <button onClick={() => handleUpdatePlayerAssists(sm.id, gk.id, 1)} className="w-5 h-5 flex items-center justify-center bg-blue-50 rounded text-blue-600 hover:bg-blue-100 transition-colors">+</button>
+                                                  </div>
+                                                </div>
+                                                <button onClick={() => handleRemovePlayerFromSubMatch(sm.id, 'B', gk.id)} className="w-full px-3 py-1.5 text-left text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-navy-50">❌ Remover</button>
+                                              </div>
+                                            </>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 );
                               }
@@ -1487,14 +1773,57 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                                   )}></span>
                                   <span className="text-[11px] sm:text-xs font-bold text-navy-800 truncate">{p.nickname || p.name}</span>
                                 </div>
-                                {!sm.finished && isAdmin && (
-                                  <button
-                                    onClick={() => handleRemovePlayerFromSubMatch(sm.id, 'B', p.id)}
-                                    className="p-1.5 sm:p-1 text-red-100 group-hover/player:text-red-400 active:text-red-600 hover:text-red-500 transition-all"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                  </button>
-                                )}
+                                <div className="flex items-center gap-1">
+                                  {sm.goals?.[p.id] && (
+                                    <span className="text-[10px] font-black text-brand-600 bg-brand-50 px-1 rounded flex items-center gap-0.5">
+                                      ⚽ {sm.goals[p.id]}
+                                    </span>
+                                  )}
+                                  {sm.assists?.[p.id] && (
+                                    <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-1 rounded flex items-center gap-0.5">
+                                      👟 {sm.assists[p.id]}
+                                    </span>
+                                  )}
+                                  {!sm.finished && isAdmin && (
+                                    <div className="relative">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActivePlayerMenu(activePlayerMenu?.playerId === p.id ? null : { subMatchId: sm.id, playerId: p.id });
+                                        }}
+                                        className="p-1 text-navy-400 hover:text-navy-600 transition-colors"
+                                      >
+                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                          <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                                        </svg>
+                                      </button>
+                                      {activePlayerMenu?.playerId === p.id && activePlayerMenu?.subMatchId === sm.id && (
+                                        <>
+                                          <div className="fixed inset-0 z-40" onClick={() => setActivePlayerMenu(null)} />
+                                          <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-xl border border-navy-100 z-50 overflow-hidden py-1">
+                                            <div className="w-full px-3 py-1.5 flex items-center justify-between border-b border-navy-50">
+                                              <span className="text-xs font-bold text-navy-700">⚽ Gol</span>
+                                              <div className="flex items-center gap-2">
+                                                <button onClick={() => handleUpdatePlayerGoals(sm.id, p.id, 'B', -1)} className="w-5 h-5 flex items-center justify-center bg-navy-50 rounded text-navy-600 hover:bg-navy-100 transition-colors">-</button>
+                                                <span className="text-[10px] font-black text-navy-900 min-w-[12px] text-center">{sm.goals?.[p.id] || 0}</span>
+                                                <button onClick={() => handleUpdatePlayerGoals(sm.id, p.id, 'B', 1)} className="w-5 h-5 flex items-center justify-center bg-brand-50 rounded text-brand-600 hover:bg-brand-100 transition-colors">+</button>
+                                              </div>
+                                            </div>
+                                            <div className="w-full px-3 py-1.5 flex items-center justify-between border-b border-navy-50">
+                                              <span className="text-xs font-bold text-navy-700">👟 Assist.</span>
+                                              <div className="flex items-center gap-2">
+                                                <button onClick={() => handleUpdatePlayerAssists(sm.id, p.id, -1)} className="w-5 h-5 flex items-center justify-center bg-navy-50 rounded text-navy-600 hover:bg-navy-100 transition-colors">-</button>
+                                                <span className="text-[10px] font-black text-navy-900 min-w-[12px] text-center">{sm.assists?.[p.id] || 0}</span>
+                                                <button onClick={() => handleUpdatePlayerAssists(sm.id, p.id, 1)} className="w-5 h-5 flex items-center justify-center bg-blue-50 rounded text-blue-600 hover:bg-blue-100 transition-colors">+</button>
+                                              </div>
+                                            </div>
+                                            <button onClick={() => handleRemovePlayerFromSubMatch(sm.id, 'B', p.id)} className="w-full px-3 py-1.5 text-left text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-navy-50">❌ Remover</button>
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             ))}
                             {/* Botão de adicionar extra (linha) */}
