@@ -148,6 +148,7 @@ export async function ensureSchema() {
   await sql(`CREATE INDEX IF NOT EXISTS idx_matches_date ON matches(date)`);
   await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS arrived_player_ids TEXT`);
   await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS sub_matches TEXT`);
+  await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS mvp_votes TEXT`);
 
   // 6. Transactions
   await sql(`CREATE TABLE IF NOT EXISTS transactions(
@@ -179,32 +180,35 @@ export async function ensureSchema() {
   await sql(`ALTER TABLE comments ADD COLUMN IF NOT EXISTS author_player_id TEXT REFERENCES players(id) ON DELETE CASCADE`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_comments_group_match ON comments(group_id, match_id)`);
 
+  // 8. Match Votes
+  await sql(`CREATE TABLE IF NOT EXISTS match_votes(
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id TEXT REFERENCES matches(id) ON DELETE CASCADE,
+    voter_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    voted_for_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL
+  );`);
+  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS idx_match_votes_unique_voter ON match_votes(match_id, voter_id)`);
+
   // Global Lookups
   await sql(`CREATE TABLE IF NOT EXISTS teams(id TEXT PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT NOT NULL UNIQUE); `);
-  // Seed teams if needed
-  const teamsCount = await sql(`SELECT COUNT(*) as c FROM teams`) as any[];
-  if (parseInt(teamsCount[0].c) === 0) {
-    const teams = [
-      'América-MG', 'Athletico-PR', 'Atlético-GO', 'Atlético-MG', 'Avaí', 'Bahia', 'Botafogo', 'Bragantino',
-      'Ceará', 'Chapecoense', 'Corinthians', 'Coritiba', 'Criciúma', 'Cruzeiro', 'Cuiabá', 'Flamengo',
-      'Fluminense', 'Fortaleza', 'Goiás', 'Grêmio', 'Internacional', 'Juventude', 'Náutico', 'Palmeiras',
-      'Paraná', 'Paysandu', 'Ponte Preta', 'Santa Cruz', 'Santos', 'São Caetano', 'São Paulo', 'Sport',
-      'Vasco da Gama', 'Vitória', 'Guarani', 'Portuguesa'
-    ];
-    for (const t of teams) {
-      const teamId = createHash('md5').update(t).digest('hex');
-      await sql(`INSERT INTO teams(id, name) VALUES($1, $2) ON CONFLICT DO NOTHING`, [teamId, t]);
-    }
+  const teams = [
+    'América-MG', 'Athletico-PR', 'Atlético-GO', 'Atlético-MG', 'Avaí', 'Bahia', 'Botafogo', 'Bragantino',
+    'Ceará', 'Chapecoense', 'Corinthians', 'Coritiba', 'Criciúma', 'Cruzeiro', 'Cuiabá', 'Flamengo',
+    'Fluminense', 'Fortaleza', 'Goiás', 'Grêmio', 'Internacional', 'Juventude', 'Náutico', 'Palmeiras',
+    'Paraná', 'Paysandu', 'Ponte Preta', 'Santa Cruz', 'Santos', 'São Caetano', 'São Paulo', 'Sport',
+    'Vasco da Gama', 'Vitória', 'Guarani', 'Portuguesa'
+  ];
+  for (const t of teams) {
+    const teamId = createHash('md5').update(t).digest('hex');
+    await sql(`INSERT INTO teams(id, name) VALUES($1, $2) ON CONFLICT DO NOTHING`, [teamId, t]);
   }
 
   await sql(`CREATE TABLE IF NOT EXISTS position_functions(id TEXT PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT NOT NULL UNIQUE); `);
-  const posCount = await sql(`SELECT COUNT(*) as c FROM position_functions`) as any[];
-  if (parseInt(posCount[0].c) === 0) {
-    const positions = ['Goleiro', 'Zagueiro', 'Meia', 'Atacante', 'Mesário', 'Juíz', 'Técnico', 'Auxiliar', 'Organizador'];
-    for (const p of positions) {
-      const posId = createHash('md5').update(p).digest('hex');
-      await sql(`INSERT INTO position_functions(id, name) VALUES($1, $2) ON CONFLICT DO NOTHING`, [posId, p]);
-    }
+  const positions = ['Goleiro', 'Zagueiro', 'Meia', 'Atacante', 'Fixo', 'Ala Esquerda', 'Ala Direita', 'Pivô', 'Mesário', 'Juíz', 'Técnico', 'Auxiliar', 'Organizador'];
+  for (const p of positions) {
+    const posId = createHash('md5').update(p).digest('hex');
+    await sql(`INSERT INTO position_functions(id, name) VALUES($1, $2) ON CONFLICT DO NOTHING`, [posId, p]);
   }
 }
 

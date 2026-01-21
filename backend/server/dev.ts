@@ -21,6 +21,8 @@ import fieldsId from '../api/fields/[id]';
 import matchesIndex from '../api/matches';
 import matchesId from '../api/matches/[id]';
 import matchesReopen from '../api/matches/[id]/reopen';
+import matchesVote from '../api/matches/[id]/vote';
+import matchesVotes from '../api/matches/[id]/votes';
 import groupsMembers from '../api/groups/[id]/members';
 import transactionsIndex from '../api/transactions';
 import transactionsId from '../api/transactions/[id]';
@@ -31,6 +33,7 @@ import groupsPromoteMember from '../api/groups/[id]/promote_member';
 import groupsDemoteMember from '../api/groups/[id]/demote_member';
 import groupsCancelRequest from '../api/groups/[id]/cancel_request';
 import groupsRejectRequest from '../api/groups/[id]/reject_request';
+import { ensureSchema } from '../api/_db';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -140,6 +143,8 @@ app.delete('/api/matches/:id', matchesId);
 app.delete('/api/matches/:id/', matchesId);
 app.post('/api/matches/:id/reopen', matchesReopen);
 app.post('/api/matches/:id/reopen/', matchesReopen);
+app.post('/api/matches/:id/vote', matchesVote);
+app.get('/api/matches/:id/votes', matchesVotes);
 
 app.get('/api/transactions', transactionsIndex);
 app.put('/api/transactions/:id', transactionsId);
@@ -160,8 +165,7 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(frontendDist, 'index.html'));
 });
 
-import { ensureSchema } from '../api/_db';
-
+// Run migrations on startup
 ensureSchema().then(() => {
   app.listen(3001, '0.0.0.0', () => {
     console.log('Server running on http://0.0.0.0:3001');

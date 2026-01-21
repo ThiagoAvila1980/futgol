@@ -8,6 +8,7 @@ import { LandingScreen } from './components/LandingScreen';
 import { GroupsScreen } from './components/GroupsScreen';
 import { ProfileScreen } from './components/ProfileScreen';
 import { FinancialScreen } from './components/FinancialScreen';
+import { StatsScreen } from './components/StatsScreen';
 import { storage } from './services/storage';
 import { authService } from './services/auth';
 import { Button } from './components/ui/Button';
@@ -432,6 +433,14 @@ const App: React.FC = () => {
             players={players}
           />
         );
+      case 'stats':
+        return (
+          <StatsScreen
+            players={players}
+            matches={matches}
+            activeGroup={activeGroup!}
+          />
+        );
       case 'dashboard':
       default:
         return (
@@ -538,10 +547,10 @@ const App: React.FC = () => {
                   <div className="relative z-10">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-accent-50 flex items-center gap-2 mb-4">
                       <span className="bg-white/20 p-1 rounded">🏆</span>
-                      Destaque da Temporada
+                      Estatísticas dos jogadores
                     </h3>
 
-                    <div className="flex items-center gap-4">
+                    <div onClick={() => setCurrentView('stats')} className="flex items-center gap-4 cursor-pointer">
                       <div className={cn(
                         "w-16 h-16 rounded-full flex items-center justify-center text-white border-2 border-white/40 font-black text-2xl shadow-lg",
                         topPlayer.isMonthlySubscriber ? "bg-green-500" :
@@ -564,15 +573,15 @@ const App: React.FC = () => {
                 </div>
               ) : (
                 <div
-                  onClick={() => setCurrentView('players')}
-                  className="bg-white p-6 rounded-2xl shadow-premium border border-navy-100 cursor-pointer hover:border-accent-400 transition-colors group flex flex-col justify-between"
+                  onClick={() => setCurrentView('stats')}
+                  className="bg-green-50 p-6 rounded-2xl shadow-premium border border-navy-100 cursor-pointer hover:border-accent-400 transition-colors group flex flex-col justify-between"
                 >
                   <div>
-                    <h3 className="text-lg font-heading font-bold text-navy-800 group-hover:text-accent-600 transition-colors">Craque da Galera</h3>
-                    <p className="mt-2 text-navy-500 text-sm leading-relaxed">Avalie os jogadores após as partidas para gerar o ranking de MVP.</p>
+                    <h3 className="text-lg font-heading font-bold text-navy-800 group-hover:text-accent-600 transition-colors">Estatísticas dos jogadores</h3>
+                    <p className="mt-2 text-navy-500 text-sm leading-relaxed">Acompanhe gols, assistências e frequência da galera.</p>
                   </div>
                   <div className="flex justify-end mt-4">
-                    <span className="text-5xl opacity-10 grayscale group-hover:grayscale-0 group-hover:opacity-100 transition-all filter">🏆</span>
+                    <span className="text-5xl opacity-50 ">📊</span>
                   </div>
                 </div>
               )}
@@ -581,7 +590,7 @@ const App: React.FC = () => {
               {isAdmin && (
                 <div
                   onClick={() => setCurrentView('financial')}
-                  className="bg-white p-6 rounded-2xl shadow-premium border border-navy-100 cursor-pointer hover:border-navy-300 transition-all group flex flex-col justify-between"
+                  className="bg-yellow-50 p-6 rounded-2xl shadow-premium border border-navy-100 cursor-pointer hover:border-navy-300 transition-all group flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex justify-between items-start mb-2">
@@ -592,7 +601,7 @@ const App: React.FC = () => {
                   </div>
                   <div className="mt-4 flex items-center justify-between">
                     <span className="text-navy-300 text-xs">Visão geral do caixa</span>
-                    <span className="text-4xl">💰</span>
+                    <span className="text-4xl opacity-50">💰</span>
                   </div>
                 </div>
               )}
@@ -729,6 +738,12 @@ const App: React.FC = () => {
               label="Jogos"
             />
             <NavButton
+              active={currentView === 'stats'}
+              onClick={() => setCurrentView('stats')}
+              icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>}
+              label="Estatísticas"
+            />
+            <NavButton
               active={currentView === 'players'}
               onClick={() => setCurrentView('players')}
               icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
@@ -792,7 +807,8 @@ const App: React.FC = () => {
                   currentView === 'players' ? 'Jogadores' :
                     currentView === 'groups' ? 'Meus Grupos' :
                       currentView === 'profile' ? 'Minha Conta' :
-                        currentView === 'financial' ? 'Financeiro' : 'Locais'}
+                        currentView === 'stats' ? 'Estatísticas' :
+                          currentView === 'financial' ? 'Financeiro' : 'Locais'}
             </h2>
             <p className="text-navy-500 text-sm mt-1 font-medium">
               {currentView === 'dashboard' ? `E ae  ${currentUser.name.split(' ')[0]}! Tudo pronto para o jogo?` :

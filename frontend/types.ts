@@ -116,6 +116,7 @@ export interface Match {
   scoreB: number;
   finished: boolean;
   mvpId?: string; // ID of the "Man of the Match"
+  mvpVotes?: Record<string, string>; // voterId -> candidateId
   subMatches?: SubMatch[];
 }
 
@@ -145,4 +146,4 @@ export interface Transaction {
   paidPlayerIds?: string[]; // IDs of players who contributed to an aggregated transaction
 }
 
-export type ViewState = 'dashboard' | 'players' | 'fields' | 'matches' | 'groups' | 'profile' | 'financial';
+export type ViewState = 'dashboard' | 'players' | 'fields' | 'matches' | 'groups' | 'profile' | 'financial' | 'stats';

@@ -48,7 +48,12 @@ export default async function (req: any, res: any) {
             newPaidIds = currentIds.join(',');
         }
 
-        const description = `Mensalidades`;
+        const monthNames = [
+            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+        ];
+        const monthName = monthNames[d.getUTCMonth()];
+        const description = `Mensalidades ${monthName}/${year}`;
 
         await sql(`INSERT INTO transactions(id, group_id, description, amount, type, date, category, paid_player_ids)
                VALUES($1,$2,$3,$4,'INCOME',$5,'MONTHLY_FEE',$6)

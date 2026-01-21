@@ -488,11 +488,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
     return `${age} anos`;
   };
 
-  const getPlayerStats = (playerId: string) => {
-    const matchesPlayed = matches.filter(m => m.finished && m.confirmedPlayerIds.includes(playerId)).length;
-    const mvpCount = matches.filter(m => m.mvpId === playerId).length;
-    return { matchesPlayed, mvpCount };
-  };
+
 
   return (
     <div className="space-y-6 relative animate-fade-in">
@@ -584,7 +580,6 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
           </div>
         ) : (
           displayedPlayers.map((player) => {
-            const stats = getPlayerStats(player.id);
             const displayName = player.nickname || player.name;
             const avatarUrl = player.avatar;
             const whatsappLink = player.phone ? `https://wa.me/55${player.phone.replace(/\D/g, '')}` : null;
@@ -645,21 +640,11 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 mb-4 text-xs text-navy-500 bg-navy-50/50 p-2 rounded-lg">
-                    <div className="flex flex-col items-center p-1 rounded bg-white shadow-sm">
-                      <span className="font-bold text-navy-900 text-lg leading-none">{stats.matchesPlayed}</span>
-                      <span className="text-[10px] uppercase font-bold text-navy-400">Jogos</span>
-                    </div>
-                    <div className="flex flex-col items-center p-1 rounded bg-white shadow-sm">
-                      <span className="font-bold text-accent-500 text-lg leading-none">{stats.mvpCount}</span>
-                      <span className="text-[10px] uppercase font-bold text-navy-400">MVPs</span>
-                    </div>
-                    <div className="col-span-2 flex justify-between items-center px-2 py-1">
-                      <span className="text-[10px] uppercase font-bold text-navy-400">{player.birthDate ? calculateAge(player.birthDate) : '--'}</span>
-                      <div className="flex text-accent-400 text-sm">
-                        {'★'.repeat(Math.floor(player.rating))}
-                        <span className="text-navy-100">{'★'.repeat(5 - Math.floor(player.rating))}</span>
-                      </div>
+                  <div className="flex justify-between items-center mb-4 text-xs text-navy-500 bg-navy-50/50 p-2.5 rounded-lg border border-navy-50">
+                    <span className="font-bold text-navy-400 uppercase tracking-wider">{player.birthDate ? calculateAge(player.birthDate) : '--'}</span>
+                    <div className="flex text-accent-400 text-sm">
+                      {'★'.repeat(Math.floor(player.rating))}
+                      <span className="text-navy-100">{'★'.repeat(5 - Math.floor(player.rating))}</span>
                     </div>
                   </div>
 
