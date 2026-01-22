@@ -1940,11 +1940,11 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
     const confirmedPlayersForFinished = playablePlayers.filter(p => selectedMatch.confirmedPlayerIds.includes(p.id));
     const filters = [
       { key: 'all', label: `Todos (${playablePlayers.filter(p => !p.isGuest).length})` },
+      { key: 'guests', label: `Convidados (${playablePlayers.filter(p => p.isGuest).length})` },
       { key: 'confirmed', label: `Confirmados (${confirmedPlayersForFinished.length})` },
       { key: 'paid', label: `Pagos (${playablePlayers.filter(p => selectedMatch.paidPlayerIds?.includes(p.id)).length})` },
       { key: 'unpaid', label: `A Pagar (${playablePlayers.filter(p => selectedMatch.confirmedPlayerIds.includes(p.id) && !(selectedMatch.paidPlayerIds || []).includes(p.id) && !p.isMonthlySubscriber && p.position !== Position.GOLEIRO).length})` },
-      { key: 'monthly', label: `Mensalistas (${playablePlayers.filter(p => p.isMonthlySubscriber).length})` },
-      { key: 'guests', label: `Convidados (${playablePlayers.filter(p => p.isGuest).length})` }
+      { key: 'monthly', label: `Mensalistas (${playablePlayers.filter(p => p.isMonthlySubscriber).length})` }
     ];
 
     if (!isAdmin) {

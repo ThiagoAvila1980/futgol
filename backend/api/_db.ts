@@ -8,7 +8,7 @@ const DATABASE_URL = process.env.DATABASE_URL || 'postgres://postgres:19thi19@lo
 function isLocal(url: string) {
   try {
     const u = new URL(url);
-    return u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+    return u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === 'db';
   } catch {
     return false;
   }
