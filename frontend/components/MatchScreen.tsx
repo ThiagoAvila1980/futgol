@@ -36,7 +36,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
 
   // Estados de Filtro (Lista de Presença e Pagamentos)
-  const [playerFilter, setPlayerFilter] = useState<'all' | 'confirmed' | 'paid' | 'unpaid' | 'monthly'>('all');
+  const [playerFilter, setPlayerFilter] = useState<'all' | 'confirmed' | 'paid' | 'unpaid' | 'monthly' | 'guests'>('all');
   const [finishedPaymentsFilter, setFinishedPaymentsFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
 
   // Controle de Modais
@@ -113,6 +113,10 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
   const currentPlayer = players.find(p => p.userId === currentUser.id);
 
   const getDisplayName = (p: Player) => p.nickname || p.name;
+
+  // Filtro de Posições que não jogam (Staff)
+  const STAFF_POSITIONS = ['auxiliar', 'mesário', 'juiz', 'juíz', 'organizador', 'técnico', 'tecnico'];
+  const playablePlayers = players.filter(p => !STAFF_POSITIONS.includes((p.position || '').toLowerCase()));
 
   const currentMonth = () => new Date().toISOString().split('T')[0].slice(0, 7);
   // Sincroniza o status de pagamento mensal dos jogadores do grupo
@@ -603,7 +607,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
 
     // Filtra apenas jogadores de linha na fila
     const arrivedOutfielderIds = currentArrivedIds.filter(id => {
-      const p = players.find(player => player.id === id);
+      const p = playablePlayers.find(player => player.id === id);
       return p && p.position !== Position.GOLEIRO;
     });
 
@@ -614,7 +618,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
 
     // Pega os primeiros jogadores de linha na fila que respeitam a ordem de chegada
     const matchOutfielderIds = arrivedOutfielderIds.slice(0, totalNeeded);
-    const matchPlayers = players.filter(p => matchOutfielderIds.includes(p.id));
+    const matchPlayers = playablePlayers.filter(p => matchOutfielderIds.includes(p.id));
 
     setIsBalancing(true);
     setIsSaving(true);
@@ -631,7 +635,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
         // --- PRIMEIRO JOGO DO DIA ---
         // Pega os primeiros 2N jogadores de linha para equilibrar
         const firstTwoTeamsIds = arrivedOutfielderIds.slice(0, outfieldPlayers * 2);
-        const matchPlayers = players.filter(p => firstTwoTeamsIds.includes(p.id));
+        const matchPlayers = playablePlayers.filter(p => firstTwoTeamsIds.includes(p.id));
 
         const balanced = balanceTeamsManual(matchPlayers);
         tA = matchPlayers.filter(p => balanced.teamAIds.includes(p.id));
@@ -701,7 +705,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
           attempts++;
         }
 
-        tB = players.filter(p => teamBIds.includes(p.id))
+        tB = playablePlayers.filter(p => teamBIds.includes(p.id))
           .sort((a, b) => teamBIds.indexOf(a.id) - teamBIds.indexOf(b.id));
         reasoning = `Rotação automática: Time que ficou + Próximos ${outfieldPlayers} da fila.`;
       }
@@ -1187,7 +1191,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
         </header>
 
         {(() => {
-          const confirmedPlayers = players.filter(p => selectedMatch.confirmedPlayerIds.includes(p.id));
+          const confirmedPlayers = playablePlayers.filter(p => selectedMatch.confirmedPlayerIds.includes(p.id));
           const arrivedIds = selectedMatch.arrivedPlayerIds || [];
 
           const waitingPlayers = confirmedPlayers
@@ -1538,7 +1542,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                                 <div className="relative">
                                   <select
                                     onChange={(e) => {
-                                      const p = players.find(pl => pl.id === e.target.value);
+                                      const p = playablePlayers.find(pl => pl.id === e.target.value);
                                       if (p) handleAddPlayerToSubMatch(sm.id, 'A', p);
                                       e.target.value = "";
                                     }}
@@ -1546,7 +1550,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                                     disabled={sm.finished}
                                   >
                                     <option value="">+ GOLEIRO</option>
-                                    {players
+                                    {playablePlayers
                                       .filter(p => p.position === Position.GOLEIRO && (selectedMatch.arrivedPlayerIds || []).includes(p.id))
                                       .filter(p => !sm.teamA.some(tp => tp.id === p.id) && !sm.teamB.some(tp => tp.id === p.id))
                                       .map(p => (
@@ -1651,7 +1655,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                                   className="w-full text-[10px] font-bold text-center bg-gray-50 border border-dashed border-gray-200 text-gray-400 p-2 sm:p-1.5 rounded-lg hover:border-brand-300 hover:text-brand-500 transition-all appearance-none cursor-pointer"
                                 >
                                   <option value="">+ JOGADOR</option>
-                                  {players
+                                  {playablePlayers
                                     .filter(p => (selectedMatch.arrivedPlayerIds || []).includes(p.id))
                                     .filter(p => !sm.teamA.some(tp => tp.id === p.id) && !sm.teamB.some(tp => tp.id === p.id))
                                     .map(p => (
@@ -1760,7 +1764,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                                 <div className="relative">
                                   <select
                                     onChange={(e) => {
-                                      const p = players.find(pl => pl.id === e.target.value);
+                                      const p = playablePlayers.find(pl => pl.id === e.target.value);
                                       if (p) handleAddPlayerToSubMatch(sm.id, 'B', p);
                                       e.target.value = "";
                                     }}
@@ -1768,7 +1772,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                                     disabled={sm.finished}
                                   >
                                     <option value="">+ GOLEIRO</option>
-                                    {players
+                                    {playablePlayers
                                       .filter(p => p.position === Position.GOLEIRO && (selectedMatch.arrivedPlayerIds || []).includes(p.id))
                                       .filter(p => !sm.teamA.some(tp => tp.id === p.id) && !sm.teamB.some(tp => tp.id === p.id))
                                       .map(p => (
@@ -1873,7 +1877,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                                   className="w-full text-[10px] font-bold text-center bg-gray-50 border border-dashed border-gray-200 text-gray-400 p-2 sm:p-1.5 rounded-lg hover:border-brand-300 hover:text-brand-500 transition-all appearance-none cursor-pointer"
                                 >
                                   <option value="">+ JOGADOR</option>
-                                  {players
+                                  {playablePlayers
                                     .filter(p => (selectedMatch.arrivedPlayerIds || []).includes(p.id))
                                     .filter(p => !sm.teamA.some(tp => tp.id === p.id) && !sm.teamB.some(tp => tp.id === p.id))
                                     .map(p => (
@@ -1933,13 +1937,14 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
     const confirmedCount = selectedMatch.confirmedPlayerIds.length;
     const costPerPerson = calculateCostPerPlayer(selectedMatch);
     const totalCollected = calculateTotalCollected(selectedMatch);
-    const confirmedPlayersForFinished = players.filter(p => selectedMatch.confirmedPlayerIds.includes(p.id));
+    const confirmedPlayersForFinished = playablePlayers.filter(p => selectedMatch.confirmedPlayerIds.includes(p.id));
     const filters = [
-      { key: 'all', label: `Todos (${players.filter(p => !p.isGuest).length})` },
-      { key: 'confirmed', label: `Confirmados (${selectedMatch.confirmedPlayerIds.length})` },
-      { key: 'paid', label: `Pagos (${selectedMatch.paidPlayerIds?.length || 0})` },
-      { key: 'unpaid', label: `A Pagar (${players.filter(p => selectedMatch.confirmedPlayerIds.includes(p.id) && !(selectedMatch.paidPlayerIds || []).includes(p.id) && !p.isMonthlySubscriber && p.position !== Position.GOLEIRO).length})` },
-      { key: 'monthly', label: `Mensalistas (${players.filter(p => p.isMonthlySubscriber).length})` }
+      { key: 'all', label: `Todos (${playablePlayers.filter(p => !p.isGuest).length})` },
+      { key: 'confirmed', label: `Confirmados (${confirmedPlayersForFinished.length})` },
+      { key: 'paid', label: `Pagos (${playablePlayers.filter(p => selectedMatch.paidPlayerIds?.includes(p.id)).length})` },
+      { key: 'unpaid', label: `A Pagar (${playablePlayers.filter(p => selectedMatch.confirmedPlayerIds.includes(p.id) && !(selectedMatch.paidPlayerIds || []).includes(p.id) && !p.isMonthlySubscriber && p.position !== Position.GOLEIRO).length})` },
+      { key: 'monthly', label: `Mensalistas (${playablePlayers.filter(p => p.isMonthlySubscriber).length})` },
+      { key: 'guests', label: `Convidados (${playablePlayers.filter(p => p.isGuest).length})` }
     ];
 
     if (!isAdmin) {
@@ -1955,7 +1960,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
       return false;
     };
 
-    const sortedPlayersForPresence = [...players].sort((a, b) => {
+    const sortedPlayersForPresence = [...playablePlayers].sort((a, b) => {
       const isMeA = checkIsMe(a);
       const isMeB = checkIsMe(b);
       if (isMeA && !isMeB) return -1;
@@ -1974,6 +1979,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
         return isConfirmed && !isPaid && !isMonthly && !isGoalkeeper;
       }
       if (playerFilter === 'monthly') return p.isMonthlySubscriber;
+      if (playerFilter === 'guests') return p.isGuest;
       return true; // 'all'
     });
     if (playerFilter === 'all') {
@@ -2011,7 +2017,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
             <div className="flex-1">
               <div className="flex justify-between items-start w-full">
                 <div>
-                  <h2 className="text-2xl font-bold text-navy-900 mb-1 pr-20">Jogo: {selectedMatch.date.split('-').reverse().join('/')}</h2>
+                  <h2 className="text-2xl font-bold text-navy-900 mb-1 pr-20">Jogos: {selectedMatch.date.split('-').reverse().join('/')}</h2>
                   <p className="text-brand-600 font-medium text-lg flex items-center gap-2">
                     <span>⏰ {selectedMatch.time}</span>
                     <span className="w-1.5 h-1.5 bg-navy-300 rounded-full"></span>
@@ -2020,7 +2026,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                 </div>
                 <button
                   onClick={async () => {
-                    const confirmados = players.filter(p => selectedMatch.confirmedPlayerIds.includes(p.id));
+                    const confirmados = playablePlayers.filter(p => selectedMatch.confirmedPlayerIds.includes(p.id));
                     const listaJogadores = confirmados.map((p, i) => {
                       const status = (!p.isMonthlySubscriber && !selectedMatch.paidPlayerIds?.includes(p.id)) ? '❌' : '✅';
                       return `${i + 1}. ${p.nickname || p.name} ${status}`;
@@ -2110,7 +2116,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                       <div className="flex flex-wrap gap-2 mb-4">
                         {[
                           { id: 'all', label: `Todos (${confirmedPlayersForFinished.length})` },
-                          { id: 'paid', label: `Pagos (${(selectedMatch.paidPlayerIds || []).length})` },
+                          { id: 'paid', label: `Pagos (${confirmedPlayersForFinished.filter(p => (selectedMatch.paidPlayerIds || []).includes(p.id)).length})` },
                           { id: 'unpaid', label: `A Pagar (${confirmedPlayersForFinished.filter(p => !(selectedMatch.paidPlayerIds || []).includes(p.id) && !p.isMonthlySubscriber && p.position !== Position.GOLEIRO).length})` }
                         ].map(f => (
                           <button
@@ -2236,7 +2242,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
             <Card>
               <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-lg text-navy-900">Lista de Jogadores</h3>
+                  <h3 className="font-bold text-lg text-navy-900">Lista de Presença de Jogadores</h3>
                   {onRefresh && (
                     <button
                       onClick={async () => {
@@ -2268,21 +2274,6 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                     </button>
                   )}
                 </div>
-                {isAdmin && (
-                  <Button size="sm" variant="secondary" onClick={async () => {
-                    setIsLoadingGuests(true);
-                    try {
-                      const all = await storage.players.getAll(activeGroupId);
-                      const available = all.filter(p => p.isGuest && !selectedMatch.confirmedPlayerIds.includes(p.id));
-                      setGuestCandidates(available);
-                      setIsGuestPickerOpen(true);
-                    } finally {
-                      setIsLoadingGuests(false);
-                    }
-                  }}>
-                    + Convidado
-                  </Button>
-                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 max-h-[400px] overflow-y-auto pr-1">
