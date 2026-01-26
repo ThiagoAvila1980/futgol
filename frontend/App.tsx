@@ -15,11 +15,8 @@ import { Button } from './components/ui/Button';
 import { Card } from './components/ui/Card';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import setupLocatorUI from "@locator/runtime";
 
-if (process.env.NODE_ENV === "development") {
-  setupLocatorUI();
-}
+import { Preloader } from './components/Preloader';
 
 // Função utilitária para combinar classes do Tailwind de forma inteligente
 function cn(...inputs: (string | undefined | null | false)[]) {
@@ -244,14 +241,19 @@ const App: React.FC = () => {
   const handleDeletePlayer = async (id: string) => {
     if (!activeGroup) return;
     const playerToRemove = players.find(p => p.id === id);
-    await storage.players.delete(id);
-    if (playerToRemove && playerToRemove.userId) {
-      await storage.groups.removeMember(activeGroup.id, playerToRemove.userId);
+
+    // Removida chamada para storage.players.delete(id) pois ela tentava deletar o usuário global
+    // e o endpoint API não suportava DELETE, causando erro 405.
+    // Apenas removemos a associação com o grupo abaixo.
+
+    if (playerToRemove) {
+      const targetId = playerToRemove.userId || playerToRemove.id;
+      await storage.groups.removeMember(activeGroup.id, targetId);
       setActiveGroup(prev => {
         if (!prev) return null;
         return {
           ...prev,
-          members: prev.members ? prev.members.filter(mId => mId !== playerToRemove.userId) : []
+          members: prev.members ? prev.members.filter(mId => mId !== targetId) : []
         };
       });
     }
@@ -624,16 +626,7 @@ const App: React.FC = () => {
 
   // --- Auth & Loading States ---
   if (isAuthLoading) {
-    return (
-      <div className="min-h-screen bg-navy-950 flex items-center justify-center relative overflow-hidden">
-        <div className="relative z-10 flex flex-col items-center">
-          <div className="animate-spin duration-700">
-            <div className="w-16 h-16 rounded-full border-4 border-brand-600 border-t-white/20"></div>
-          </div>
-          <p className="mt-6 text-white text-lg font-heading font-bold">Carregando Futgol...</p>
-        </div>
-      </div>
-    );
+    return <Preloader fullScreen text="Carregando Futgol..." />;
   }
 
   if (!currentUser) {
@@ -799,32 +792,27 @@ const App: React.FC = () => {
 
       {/* Main Content Area */}
       <main className={`flex-1 p-4 md:p-8 overflow-y-auto bg-navy-50 relative ${activeGroup ? 'pb-24 md:pb-8' : ''}`}>
-        <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h2 className="text-3xl font-heading font-bold text-navy-900 capitalize tracking-tight">
-              {currentView === 'dashboard' ? 'Início' :
-                currentView === 'matches' ? 'Jogos' :
+        {isDataLoading && <Preloader overlay text="Sincronizando..." />}
+        {currentView !== 'matches' && (
+          <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h2 className="text-3xl font-heading font-bold text-navy-900 capitalize tracking-tight">
+                {currentView === 'dashboard' ? 'Início' :
                   currentView === 'players' ? 'Jogadores' :
                     currentView === 'groups' ? 'Meus Grupos' :
                       currentView === 'profile' ? 'Minha Conta' :
                         currentView === 'stats' ? 'Estatísticas' :
                           currentView === 'financial' ? 'Financeiro' : 'Locais'}
-            </h2>
-            <p className="text-navy-500 text-sm mt-1 font-medium">
-              {currentView === 'dashboard' ? `E ae  ${currentUser.name.split(' ')[0]}! Tudo pronto para o jogo?` :
-                currentView === 'groups' ? 'Gerencie seus times' :
-                  currentView === 'profile' ? 'Atualize seus dados pessoais' :
-                    currentView === 'financial' ? 'Controle financeiro transparente' : 'Gestão profissional do grupo.'}
-            </p>
-          </div>
-
-          {isDataLoading && (
-            <div className="text-xs font-bold text-brand-600 flex items-center gap-2 bg-brand-50 px-3 py-1.5 rounded-full uppercase tracking-wider animate-pulse border border-brand-100">
-              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-              Sincronizando
+              </h2>
+              <p className="text-navy-500 text-sm mt-1 font-medium">
+                {currentView === 'dashboard' ? `E ae  ${currentUser.name.split(' ')[0]}! Tudo pronto para o jogo?` :
+                  currentView === 'groups' ? 'Gerencie seus times' :
+                    currentView === 'profile' ? 'Atualize seus dados pessoais' :
+                      currentView === 'financial' ? 'Controle financeiro transparente' : 'Gestão profissional do grupo.'}
+              </p>
             </div>
-          )}
-        </header>
+          </header>
+        )}
 
         {renderContent()}
       </main>

@@ -14,8 +14,6 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
-    "@locator/babel-jsx": "^0.5.1",
-    "@locator/runtime": "^0.5.1",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",

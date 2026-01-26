@@ -39,6 +39,7 @@ export interface Player {
   isMonthlySubscriber?: boolean; // New: Is this player a monthly payer?
   monthlyStartMonth?: string; // YYYY-MM from when monthly starts
   isGuest?: boolean; // New: Guest profile without linked user
+  role?: string; // 'admin' | 'member'
   goals?: number;
   assists?: number;
 }

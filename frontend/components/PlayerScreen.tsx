@@ -74,7 +74,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
   const [monthlyStartMonth, setMonthlyStartMonth] = useState<string>('');
   const [isGuestCheckbox, setIsGuestCheckbox] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [playerTypeFilter, setPlayerTypeFilter] = useState<'all' | 'group' | 'guests'>('all');
+  const [playerTypeFilter, setPlayerTypeFilter] = useState<'all' | 'group' | 'guests' | 'admins'>('all');
   const [positionsList, setPositionsList] = useState<string[]>([]);
 
   useEffect(() => {
@@ -173,11 +173,15 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
       return matchesName || matchesNickname;
     });
 
-    // Filtro por tipo: Todos, Apenas Grupo ou Apenas Convidados
+    // Filtro por tipo: Todos, Apenas Grupo, Apenas Convidados ou Administradores
     if (playerTypeFilter === 'group') {
       result = result.filter(p => !p.isGuest);
     } else if (playerTypeFilter === 'guests') {
       result = result.filter(p => p.isGuest);
+    } else if (playerTypeFilter === 'admins') {
+      result = result.filter(p => 
+        p.role === 'admin' || (p.userId && activeGroup.admins?.includes(p.userId))
+      );
     }
 
     // Ordenação dinâmica
@@ -360,8 +364,8 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
           await onSave(updatedPlayer);
 
           // Handle Admin Role
-          if (existing.userId && isOwner) {
-            const isCurrentlyAdmin = activeGroup.admins?.includes(existing.userId);
+          if (existing.userId && isAdmin) {
+            const isCurrentlyAdmin = existing.role === 'admin' || activeGroup.admins?.includes(existing.userId);
             if (isAdminCheckbox && !isCurrentlyAdmin) {
               await storage.groups.promoteMember(activeGroup.id, existing.userId);
             } else if (!isAdminCheckbox && isCurrentlyAdmin && existing.userId !== activeGroup.adminId) {
@@ -393,7 +397,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
         const newUserId = response?.userId || targetUserId;
 
         // Handle Admin Role for new member
-        if (isAdminCheckbox && isOwner && newUserId) {
+        if (isAdminCheckbox && isAdmin && newUserId) {
           await storage.groups.promoteMember(activeGroup.id, newUserId);
         }
       }
@@ -431,7 +435,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
     setEditingId(player.id);
     setFoundGlobalUser({ userId: player.userId, name: player.name }); // Mock for validation pass if needed
 
-    if (player.userId && activeGroup.admins?.includes(player.userId)) {
+    if (player.role === 'admin' || (player.userId && activeGroup.admins?.includes(player.userId))) {
       setIsAdminCheckbox(true);
     } else {
       setIsAdminCheckbox(false);
@@ -553,6 +557,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
                 <option value="all">Todos</option>
                 <option value="group">Membros (Grupo)</option>
                 <option value="guests">Convidados</option>
+                <option value="admins">Administradores</option>
               </select>
               <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-navy-500">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
@@ -937,7 +942,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
             </div>
 
             {/* Admin Checkbox */}
-            {isOwner && (editingId || foundGlobalUser) && (
+            {isAdmin && (editingId || foundGlobalUser) && (
               <div className="md:col-span-2 flex items-center gap-3 p-4 bg-yellow-50 rounded-2xl border border-yellow-100 group transition-all hover:bg-yellow-100/50">
                 <div className="relative flex items-center justify-center">
                   <input
