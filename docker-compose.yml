@@ -38,8 +38,10 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     restart: always
-    ports:
-      - "80:80"
+    # No Coolify, não expomos a porta 80 diretamente para o host (evita conflito com o proxy)
+    # O Coolify detectará a porta 80 exposta pelo Dockerfile
+    expose:
+      - "80"
     depends_on:
       - backend
     networks:
