@@ -1036,28 +1036,74 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                                   "group relative flex items-center justify-between bg-white p-3 rounded-xl border border-navy-50 shadow-sm",
                                   activePlayerMenu?.playerId === p.id && activePlayerMenu?.subMatchId === sm.id ? "z-50 border-brand-500 shadow-xl" : "z-0"
                                 )} draggable={isAdmin && !sm.finished} onDragStart={() => handleDragStart(p.id, sm.id, idx === 0 ? 'A' : 'B')}>
-                                  <div className="flex items-center gap-2 overflow-hidden">
-                                    <span className={cn(
-                                      "w-1 h-4 rounded-full flex-shrink-0",
-                                      p.position === Position.GOLEIRO ? "bg-red-500" :
-                                        p.position === Position.DEFENSOR ? "bg-orange-500" :
-                                          p.position === Position.MEIO ? "bg-blue-500" :
-                                            "bg-green-500"
-                                    )} />
-                                    <span className="text-xs font-bold truncate text-navy-900">{p.nickname || p.name}</span>
+                                  <div className="flex flex-col flex-1 min-w-0 pr-2">
+                                    <div className="flex items-center gap-2 overflow-hidden">
+                                      <span className={cn(
+                                        "w-1 h-3 rounded-full flex-shrink-0",
+                                        p.position === Position.GOLEIRO ? "bg-red-500" :
+                                          p.position === Position.DEFENSOR ? "bg-orange-500" :
+                                            p.position === Position.MEIO ? "bg-blue-500" :
+                                              "bg-green-500"
+                                      )} />
+                                      <span className="text-xs font-bold truncate text-navy-900">{p.nickname || p.name}</span>
+                                    </div>
+
+                                    {/* Gols e Assistências (Abaixo do Nome) */}
+                                    {(sm.goals?.[p.id] || sm.assists?.[p.id]) && (
+                                      <div className="flex items-center gap-1.5 mt-1 ml-3">
+                                        {sm.goals?.[p.id] && (
+                                          <span className="text-[10px] font-black bg-brand-50 text-brand-600 px-1.5 py-0.5 rounded-md border border-brand-100 flex items-center gap-1 shadow-sm">
+                                            ⚽ {sm.goals[p.id]}
+                                          </span>
+                                        )}
+                                        {sm.assists?.[p.id] && (
+                                          <span className="text-[10px] font-black bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md border border-blue-100 flex items-center gap-1 shadow-sm">
+                                            👟 {sm.assists[p.id]}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
-                                  <div className="flex items-center gap-1.5 ml-1">
-                                    {sm.goals?.[p.id] && <span className="text-[10px] font-black bg-brand-50 text-brand-600 px-1.5 py-0.5 rounded-md border border-brand-100">⚽ {sm.goals[p.id]}</span>}
-                                    {sm.assists?.[p.id] && <span className="text-[10px] font-black bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md border border-blue-100">👟 {sm.assists[p.id]}</span>}
+
+                                  <div className="flex items-center flex-shrink-0">
                                     {isAdmin && !sm.finished && (
                                       <button onClick={(e) => { e.stopPropagation(); setActivePlayerMenu(activePlayerMenu?.playerId === p.id && activePlayerMenu?.subMatchId === sm.id ? null : { subMatchId: sm.id, playerId: p.id }); }} className="text-navy-300 hover:text-navy-900 transition-all p-1">⋮</button>
                                     )}
                                   </div>
                                   {activePlayerMenu?.playerId === p.id && activePlayerMenu?.subMatchId === sm.id && (
-                                    <div onClick={(e) => e.stopPropagation()} className="absolute right-0 top-full mt-1 z-50 bg-white shadow-2xl border-2 border-navy-50 p-2 rounded-2xl flex flex-col gap-1 min-w-[120px] animate-fade-in">
-                                      <button onClick={() => handleUpdatePlayerGoals(sm.id, p.id, idx === 0 ? 'A' : 'B', 1)} className="text-[10px] font-black p-2 hover:bg-brand-50 text-brand-700 rounded-lg text-left">⚽ + GOL</button>
-                                      <button onClick={() => handleUpdatePlayerAssists(sm.id, p.id, 1)} className="text-[10px] font-black p-2 hover:bg-blue-50 text-blue-700 rounded-lg text-left">👟 + Assistência</button>
-                                      <button onClick={() => handleRemovePlayerFromSubMatch(sm.id, idx === 0 ? 'A' : 'B', p.id)} className="text-[10px] font-black p-2 text-red-500 hover:bg-red-50 rounded-lg text-left border-t border-navy-50 mt-1">❌ REMOVER ATLETA</button>
+                                    <div onClick={(e) => e.stopPropagation()} className="absolute right-0 top-full mt-1 z-50 bg-white shadow-2xl border-2 border-navy-50 p-2 rounded-2xl flex flex-col gap-2 min-w-[160px] animate-fade-in">
+                                      {/* Controles de Gol */}
+                                      <div className="flex items-center justify-between gap-2 p-1 bg-brand-50/50 rounded-xl border border-brand-100">
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); handleUpdatePlayerGoals(sm.id, p.id, idx === 0 ? 'A' : 'B', -1); setActivePlayerMenu(null); }}
+                                          className="w-8 h-8 flex items-center justify-center bg-white rounded-lg text-brand-600 hover:bg-brand-100 active:scale-95 transition-all font-black text-lg shadow-sm"
+                                        >-</button>
+                                        <span className="text-[10px] font-black text-brand-800 uppercase tracking-widest">Gol</span>
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); handleUpdatePlayerGoals(sm.id, p.id, idx === 0 ? 'A' : 'B', 1); setActivePlayerMenu(null); }}
+                                          className="w-8 h-8 flex items-center justify-center bg-brand-600 rounded-lg text-white hover:bg-brand-700 active:scale-95 transition-all font-black text-lg shadow-sm"
+                                        >+</button>
+                                      </div>
+
+                                      {/* Controles de Assistência */}
+                                      <div className="flex items-center justify-between gap-2 p-1 bg-blue-50/50 rounded-xl border border-blue-100">
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); handleUpdatePlayerAssists(sm.id, p.id, -1); setActivePlayerMenu(null); }}
+                                          className="w-8 h-8 flex items-center justify-center bg-white rounded-lg text-blue-600 hover:bg-blue-100 active:scale-95 transition-all font-black text-lg shadow-sm"
+                                        >-</button>
+                                        <span className="text-[10px] font-black text-blue-800 uppercase tracking-widest">Assit.</span>
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); handleUpdatePlayerAssists(sm.id, p.id, 1); setActivePlayerMenu(null); }}
+                                          className="w-8 h-8 flex items-center justify-center bg-blue-600 rounded-lg text-white hover:bg-blue-700 active:scale-95 transition-all font-black text-lg shadow-sm"
+                                        >+</button>
+                                      </div>
+
+                                      <button
+                                        onClick={() => { handleRemovePlayerFromSubMatch(sm.id, idx === 0 ? 'A' : 'B', p.id); setActivePlayerMenu(null); }}
+                                        className="text-[10px] font-black p-3 text-red-500 hover:bg-red-50 rounded-xl text-center border-t border-navy-50 mt-1 transition-colors uppercase tracking-tight"
+                                      >
+                                        Remover Atleta
+                                      </button>
                                     </div>
                                   )}
                                 </div>
@@ -1135,9 +1181,38 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
           </div>
           <div className="flex gap-2">
             {!selectedMatch.finished && (
-              <Button onClick={() => setView('queue')} className="bg-amber-500 hover:bg-amber-600 text-black border-none shadow-lg shadow-amber-500/20">Arena Pro</Button>
+              <Button
+                onClick={() => setView('queue')}
+                className="bg-amber-500 hover:bg-amber-600 text-black border-none shadow-lg shadow-amber-500/20 flex items-center gap-2"
+                leftIcon={
+                  <div className="bg-emerald-600 p-1 rounded-md border border-emerald-400/30">
+                    <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="3" width="20" height="18" rx="2" ry="2"></rect>
+                      <line x1="12" y1="3" x2="12" y2="21"></line>
+                      <circle cx="12" cy="12" r="4"></circle>
+                      <path d="M2 9h3a4 4 0 0 1 0 6H2"></path>
+                      <path d="M22 9h-3a4 4 0 0 0 0 6h3"></path>
+                    </svg>
+                  </div>
+                }
+              >
+                Arena
+              </Button>
             )}
-            {isAdmin && !selectedMatch.finished && <Button onClick={() => setIsFinishing(true)} variant="danger">Encerrar</Button>}
+            {isAdmin && !selectedMatch.finished && (
+              <Button
+                onClick={() => setIsFinishing(true)}
+                variant="danger"
+                className="flex items-center gap-2"
+                leftIcon={
+                  <div className="bg-white p-1 rounded-full shadow-sm border border-navy-100 flex items-center justify-center overflow-hidden">
+                    <img src="/juiz.png" alt="Juiz" className="w-8 h-8 object-contain" />
+                  </div>
+                }
+              >
+                Encerrar
+              </Button>
+            )}
           </div>
         </Card>
 
@@ -1150,22 +1225,47 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
 
         <Card className="p-0 overflow-hidden border-2 border-navy-100">
           <div className="flex items-center justify-between border-b bg-green-50/50 pr-4">
-            <div className="flex overflow-x-auto scrollbar-hide">
-              {['all', 'confirmed', 'paid', 'monthly'].map(f => (
-                <button key={f} onClick={() => setPlayerFilter(f as any)} className={cn("px-6 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 whitespace-nowrap", playerFilter === f ? "border-brand-500 text-brand-600 bg-white" : "border-transparent text-navy-400 hover:text-navy-600")}>
-                  {f === 'all' ? 'Membros' : f === 'confirmed' ? 'Confirmados' : f === 'paid' ? 'Pagos' : 'Convidados'}
+            <div className="flex items-center flex-1 overflow-x-auto scrollbar-hide">
+              {[
+                { id: 'all', label: 'Membros' },
+                { id: 'monthly', label: 'Convidados' },
+                { id: 'confirmed', label: 'Confirmados' },
+                { id: 'paid', label: 'Pagos' }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setPlayerFilter(f.id as any)}
+                  className={cn(
+                    "px-6 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 whitespace-nowrap",
+                    playerFilter === f.id ? "border-brand-500 text-brand-600 bg-white" : "border-transparent text-navy-400 hover:text-navy-600"
+                  )}
+                >
+                  {f.label}
                 </button>
               ))}
             </div>
-            <button
-              onClick={() => setIsPlayerListCollapsed(!isPlayerListCollapsed)}
-              className="p-2 text-navy-400 hover:text-navy-900 transition-all duration-300 rounded-full hover:bg-black/5"
-              style={{ transform: isPlayerListCollapsed ? 'rotate(-180deg)' : 'rotate(0deg)' }}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onRefresh && onRefresh()}
+                className="p-2 text-navy-400 hover:text-brand-600 transition-all rounded-full hover:bg-white/50"
+                title="Atualizar Lista"
+              >
+                <svg className={cn("w-5 h-5", isLoading && "animate-spin")} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+
+              <button
+                onClick={() => setIsPlayerListCollapsed(!isPlayerListCollapsed)}
+                className="p-2 text-navy-400 hover:text-navy-900 transition-all duration-300 rounded-full hover:bg-black/5"
+                style={{ transform: isPlayerListCollapsed ? 'rotate(-180deg)' : 'rotate(0deg)' }}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
           </div>
           {!isPlayerListCollapsed && (
             <div className="divide-y max-h-[60vh] overflow-y-auto animate-slide-down">
@@ -1175,12 +1275,12 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                 return (
                   <div key={p.id} className="p-4 flex items-center justify-between hover:bg-navy-50/50 transition-colors">
                     <div className="flex items-center gap-4">
-                      <div onClick={() => isAdmin && togglePresence(selectedMatch.id, p.id)} className={cn("w-10 h-10 rounded-xl flex items-center justify-center cursor-pointer transition-all border-2 shadow-sm", confirmed ? "bg-brand-500 border-brand-500 text-white" : "bg-white border-navy-100 text-navy-300")}>{confirmed ? '✓' : ''}</div>
-                      <div><p className="font-black text-sm uppercase text-navy-800 leading-none">{p.nickname || p.name}</p><span className="text-[9px] font-bold opacity-40 uppercase tracking-tighter">{p.position}</span></div>
+                      <div onClick={() => (isAdmin || checkIsMe(p)) && togglePresence(selectedMatch.id, p.id)} className={cn("w-10 h-10 rounded-xl flex items-center justify-center cursor-pointer transition-all border-2 shadow-sm", confirmed ? "bg-brand-500 border-brand-500 text-white" : "bg-white border-navy-100 text-navy-300")}>{confirmed ? '✓' : ''}</div>
+                      <div><p className="font-black text-sm uppercase text-navy-800 leading-none">{p.nickname || p.name}</p><span className={cn("text-[9px] font-bold uppercase tracking-tighter", p.position === Position.GOLEIRO ? "text-red-500" : p.position === Position.DEFENSOR ? "text-orange-500" : p.position === Position.MEIO ? "text-blue-500" : "text-green-600 opacity-60")}>{p.position}</span></div>
                     </div>
                     <div className="flex items-center gap-2">
                       {isAdmin && !p.isMonthlySubscriber && confirmed && p.position !== Position.GOLEIRO && (
-                        <Button size="sm" variant={paid ? "brand" : "ghost"} onClick={() => togglePayment(selectedMatch.id, p.id)} className="text-[10px] h-8 px-4 font-black">{paid ? 'PAGO' : 'PAGAR'}</Button>
+                        <Button size="sm" variant={paid ? "primary" : "danger"} onClick={() => togglePayment(selectedMatch.id, p.id)} className="text-[10px] h-8 px-4 font-black">{paid ? 'PAGO' : 'PAGAR'}</Button>
                       )}
                       {p.isMonthlySubscriber && <span className="w-8 h-8 rounded-full border-2 border-navy-100 bg-white flex items-center justify-center text-[10px] font-black text-navy-400">M</span>}
                     </div>
@@ -1246,6 +1346,15 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
             </div>
           </div>
         )}
+
+        {/* Modals needed in details view */}
+        <Modal isOpen={isFinishing} onClose={() => setIsFinishing(false)} title="Finalizar Pelada">
+          <p className="mb-6">Deseja encerrar o evento de hoje? Isso impedirá novos sorteios.</p>
+          <div className="flex gap-3">
+            <Button variant="ghost" className="flex-1" onClick={() => setIsFinishing(false)}>Voltar</Button>
+            <Button variant="danger" className="flex-1" onClick={handleFinishMatch} isLoading={isSaving}>Finalizar</Button>
+          </div>
+        </Modal>
       </div>
     );
   }
@@ -1266,7 +1375,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
           const field = fields.find(f => f.id === match.fieldId);
           const dateObj = new Date(match.date + 'T00:00:00');
           return (
-            <Card key={match.id} onClick={() => { setSelectedMatch(match); setView('details'); }} className="group cursor-pointer hover:border-navy-900 border-2 border-transparent transition-all p-5 bg-white shadow-xl shadow-navy-900/5">
+            <Card key={match.id} onClick={() => { setSelectedMatch(match); setView('details'); }} className="group relative cursor-pointer hover:border-navy-900 border-2 border-transparent transition-all p-5 bg-white shadow-xl shadow-navy-900/5">
               <div className="flex items-start gap-4">
                 <div className={cn(
                   "flex flex-col items-center rounded-2xl p-3 min-w-[70px] shadow-lg transition-colors",
