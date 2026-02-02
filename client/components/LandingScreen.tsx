@@ -58,7 +58,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({ onLoginSuccess }) 
     let isMounted = true;
     (async () => {
       try {
-        await api.get('/api/health/');
+        await api.get('/api/health');
         if (isMounted) setServerOnline(true);
       } catch {
         if (isMounted) setServerOnline(false);
