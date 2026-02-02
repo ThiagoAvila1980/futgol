@@ -116,12 +116,23 @@ app.post('/api/transactions/upsert_match', transactionsUpsertMatch);
 app.post('/api/transactions/upsert_monthly', transactionsUpsertMonthly);
 
 const frontendDist = path.resolve(process.cwd(), '../client/dist');
-app.use(express.static(frontendDist));
+const indexHtml = path.join(frontendDist, 'index.html');
+import fs from 'fs';
+const hasFrontend = fs.existsSync(indexHtml);
+
+if (hasFrontend) {
+  app.use(express.static(frontendDist));
+}
+
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) {
     return res.status(404).json({ error: 'API route not found' });
   }
-  res.sendFile(path.join(frontendDist, 'index.html'));
+  if (hasFrontend) {
+    res.sendFile(indexHtml);
+  } else {
+    res.status(404).send('Not Found (API Server)');
+  }
 });
 
 // Run migrations on startup
