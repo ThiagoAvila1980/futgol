@@ -1,5 +1,5 @@
 {
-  "name": "futgol-backend",
+  "name": "futgol-server",
   "version": "0.0.0",
   "type": "module",
   "scripts": {
@@ -17,7 +17,6 @@
     "tsx": "^4.19.2"
   },
   "devDependencies": {
-    "@locator/runtime": "^0.5.1",
     "@types/node": "^22.14.0",
     "typescript": "~5.8.2"
   }

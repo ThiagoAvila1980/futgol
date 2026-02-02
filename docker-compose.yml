@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-db_futgol}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-19thi19}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     # Não expomos a porta 5432 para o host para evitar conflito com outros BDs
     # O acesso é feito apenas internamente pela rede 'app-network'
     volumes:
@@ -16,13 +16,13 @@ services:
       timeout: 5s
       retries: 5
 
-  backend:
+  server:
     build:
-      context: ./backend
+      context: ./server
       dockerfile: Dockerfile
     restart: always
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-19thi19}@db:5432/${POSTGRES_DB:-db_futgol}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-db_futgol}
       PORT: 3001
       # Adicione outras variáveis de ambiente necessárias aqui
     depends_on:
@@ -31,9 +31,9 @@ services:
     networks:
       - app-network
 
-  frontend:
+  client:
     build:
-      context: ./frontend
+      context: ./client
       dockerfile: Dockerfile
     restart: always
     # No Coolify, não expomos a porta 80 diretamente para o host (evita conflito com o proxy)
@@ -41,7 +41,7 @@ services:
     expose:
       - "80"
     depends_on:
-      - backend
+      - server
     networks:
       - app-network
 

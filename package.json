@@ -1,1 +1,13 @@
-{}
+{
+  "name": "futgol",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "client:dev": "npm --prefix ./client run dev",
+    "server:dev": "npm --prefix ./server run dev",
+    "client:build": "npm --prefix ./client run build",
+    "server:build": "npm --prefix ./server run build",
+    "compose:up": "docker compose up -d --build",
+    "compose:down": "docker compose down"
+  }
+}

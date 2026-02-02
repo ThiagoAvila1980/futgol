@@ -24,17 +24,17 @@ dist-ssr
 *.sln
 *.sw?
 
-# Backend
-backend/venv/
-backend/__pycache__/
-backend/**/*.pyc
-backend/db.sqlite3
+# Server (backend)
+server/venv/
+server/__pycache__/
+server/**/*.pyc
+server/db.sqlite3
 .env
 *.env
 
-# Frontend
-frontend/.vercel
-frontend/dist
+# Client (frontend)
+client/.vercel
+client/dist
 
 # Local Python venv at project root
 /.venv/

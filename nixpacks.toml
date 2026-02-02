@@ -1,5 +1,0 @@
-[phases.setup]
-nixPkgs = ["docker-compose"]
-
-[start]
-cmd = "docker-compose up -d"
