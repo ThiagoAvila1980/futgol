@@ -14,9 +14,9 @@ function isLocal(url: string) {
   }
 }
 
-const usePg = isLocal(DATABASE_URL);
-const pgPool = usePg ? new Pool({ connectionString: DATABASE_URL }) : null;
-const neonSql = !usePg ? neonDriver(DATABASE_URL) : null;
+const usePg = true; // Always use pg driver to avoid Neon serverless connection issues in standard environments
+const pgPool = new Pool({ connectionString: DATABASE_URL });
+const neonSql = null;
 
 async function sql(text: string, params?: any[]) {
   if (usePg && pgPool) {
