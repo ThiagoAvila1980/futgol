@@ -1,16 +1,21 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
 import { ready } from '../../_db';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    res.statusCode = 405;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'Method not allowed' }));
+    return;
   }
 
   const id = (req.query.id || (req as any).params?.id) as string;
   const { voterId, votedForId } = req.body;
 
   if (!id || !voterId || !votedForId) {
-    return res.status(400).json({ error: 'Missing required fields' });
+    res.statusCode = 400;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'Missing required fields' }));
+    return;
   }
 
   try {
@@ -20,7 +25,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const matches = await sql(`SELECT * FROM matches WHERE id = $1`, [id as string]) as any[];
 
     if (matches.length === 0) {
-      return res.status(404).json({ error: 'Match not found' });
+      res.statusCode = 404;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Match not found' }));
+      return;
     }
 
     const match = matches[0];
@@ -40,11 +48,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (!arrivedIds.includes(voterId)) {
-      return res.status(403).json({ error: 'Voter was not present at the match' });
+      res.statusCode = 403;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Voter was not present at the match' }));
+      return;
     }
 
     if (!arrivedIds.includes(votedForId)) {
-      return res.status(400).json({ error: 'Voted player was not present at the match' });
+      res.statusCode = 400;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Voted player was not present at the match' }));
+      return;
     }
 
     // Check if voting is closed (2 days after match)
@@ -52,7 +66,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const now = new Date();
     const twoDaysInMs = 2 * 24 * 60 * 60 * 1000;
     if (now.getTime() - matchDate.getTime() > twoDaysInMs) {
-      return res.status(403).json({ error: 'Votação encerrada para esta partida' });
+      res.statusCode = 403;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Votação encerrada para esta partida' }));
+      return;
     }
 
     // 2. Insert vote
@@ -61,13 +78,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       VALUES ($1, $2, $3, $4)
     `, [id as string, voterId, votedForId, new Date().toISOString()]);
 
-    return res.status(200).json({ success: true });
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ success: true }));
+    return;
 
   } catch (error: any) {
     if (error.code === '23505') { // Unique violation (idx_match_votes_unique_voter)
-      return res.status(400).json({ error: 'User already voted for this match' });
+      res.statusCode = 400;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'User already voted for this match' }));
+      return;
     }
     console.error('Vote error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'Internal server error' }));
+    return;
   }
 }

@@ -1,15 +1,20 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
 import { ready } from '../../_db';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    res.statusCode = 405;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'Method not allowed' }));
+    return;
   }
 
   const id = (req.query.id || (req as any).params?.id) as string;
 
   if (!id) {
-    return res.status(400).json({ error: 'Missing match id' });
+    res.statusCode = 400;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'Missing match id' }));
+    return;
   }
 
   try {
@@ -37,7 +42,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // and also aggregated stats if needed.
     // Or we can just return the list and let frontend process.
     
-    return res.status(200).json({
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({
       votes: votes.map((v: any) => ({
         id: v.id,
         matchId: v.match_id,
@@ -46,10 +53,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         createdAt: v.created_at
       })),
       counts: voteCounts
-    });
+    }));
+    return;
 
   } catch (error) {
     console.error('Get votes error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'Internal server error' }));
+    return;
   }
 }

@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "tsx watch server/dev.ts",
     "build": "tsc",
-    "start": "tsx server/dev.ts"
+    "start": "tsx server/dev.ts",
+    "cleanup": "tsx server/cleanup_db.ts"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",
