@@ -24,7 +24,7 @@ export default async function (req: any, res: any) {
   }
   const sql = await ready();
   const hash = createHash('sha256').update(password).digest('hex');
-  const rows = await sql(`SELECT id, email, name, phone, avatar, birth_date, favorite_team, primary_group_id, usuario FROM players WHERE email = $1 AND password_hash = $2`, [email, hash]) as any[];
+  const rows = await sql(`SELECT id, email, name, phone, avatar, birth_date, favorite_team, primary_group_id, usuario, role FROM players WHERE email = $1 AND password_hash = $2`, [email, hash]) as any[];
   if (!rows.length) {
     res.statusCode = 400;
     res.setHeader('Content-Type', 'application/json');
@@ -41,10 +41,11 @@ export default async function (req: any, res: any) {
     birthDate: row.birth_date || null,
     favoriteTeam: row.favorite_team || null,
     primaryGroupId: row.primary_group_id || undefined,
-    usuario: !!row.usuario
+    usuario: !!row.usuario,
+    role: row.role || 'user'
   };
   const secret = process.env.JWT_SECRET || 'dev-secret';
-  const access = jwt.sign({ sub: user.id, email: user.email, name: user.name }, secret, { expiresIn: '1h' });
+  const access = jwt.sign({ sub: user.id, email: user.email, name: user.name, role: user.role }, secret, { expiresIn: '1h' });
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify({ user, access, refresh: '' }));

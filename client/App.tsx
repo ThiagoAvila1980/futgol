@@ -6,6 +6,7 @@ import { FieldScreen } from './components/FieldScreen';
 import { MatchScreen } from './components/MatchScreen';
 import { LandingScreen } from './components/LandingScreen';
 import { GroupsScreen } from './components/GroupsScreen';
+import { OwnerDashboard } from './components/OwnerDashboard';
 import { ProfileScreen } from './components/ProfileScreen';
 import { FinancialScreen } from './components/FinancialScreen';
 import { StatsScreen } from './components/StatsScreen';
@@ -138,8 +139,12 @@ const App: React.FC = () => {
             })();
             setCurrentView(savedView || 'dashboard');
           } else {
-            // Múltiplos grupos e sem histórico (ou nenhum grupo) -> Lista de grupos
-            setCurrentView('groups');
+            // Múltiplos grupos e sem histórico (ou nenhum grupo)
+            if (currentUser.role === 'field_owner') {
+              setCurrentView('owner_dashboard');
+            } else {
+              setCurrentView('groups');
+            }
           }
         } catch (e) {
           const savedView = (() => {
@@ -296,8 +301,9 @@ const App: React.FC = () => {
   };
 
   const handleDeleteMatch = async (id: string) => {
-    await storage.matches.delete(id);
-    setMatches(prev => prev.filter(m => m.id !== id));
+    const updated = await storage.matches.cancel(id);
+    setMatches(prev => prev.map(m => m.id === id ? { ...m, isCanceled: true } : m));
+    return updated;
   };
 
   const handleLogout = async () => {
@@ -368,6 +374,10 @@ const App: React.FC = () => {
   const topPlayer = getTopScorer();
 
   const renderContent = () => {
+    if (currentView === 'owner_dashboard' && currentUser) {
+      return <OwnerDashboard user={currentUser} />;
+    }
+
     if (currentView === 'profile') {
       return (
         <ProfileScreen
@@ -383,6 +393,11 @@ const App: React.FC = () => {
         <div className="flex flex-col items-center justify-center h-full text-navy-500">
           <p className="font-medium mb-3">Selecione um grupo para continuar.</p>
           <Button variant="outline" onClick={() => setCurrentView('groups')}>Ir para Meus Grupos</Button>
+          {currentUser && currentUser.role === 'field_owner' && (
+            <Button variant="ghost" onClick={() => setCurrentView('owner_dashboard')} className="mt-4 text-brand-600 font-bold border border-brand-100 bg-brand-50 hover:bg-brand-100">
+              🏢 Painel do Dono
+            </Button>
+          )}
         </div>
       );
     }
@@ -701,6 +716,14 @@ const App: React.FC = () => {
                 >
                   👥 Meus Grupos
                 </button>
+                {currentUser.role === 'field_owner' && (
+                  <button
+                    onClick={() => { setCurrentView('owner_dashboard'); setShowUserMenu(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-navy-50 flex items-center gap-2"
+                  >
+                    🏢 Painel do Dono
+                  </button>
+                )}
                 <div className="border-t border-navy-50 my-1"></div>
                 <button
                   onClick={() => { setShowLogoutModal(true); setShowUserMenu(false); }}
@@ -714,50 +737,67 @@ const App: React.FC = () => {
         </div>
 
         {/* Mobile Sidebar Navigation */}
-        {activeGroup && (
+        {(activeGroup || currentUser.role === 'field_owner') && (
           <div className="hidden md:flex md:flex-col p-4 gap-2 md:flex-1 overflow-y-auto">
-            <div className="text-xs font-bold text-navy-500 uppercase tracking-wider px-4 mb-2 mt-4">Menu Principal</div>
-
-            <NavButton
-              active={currentView === 'dashboard'}
-              onClick={() => setCurrentView('dashboard')}
-              icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>}
-              label="Início"
-            />
-            <NavButton
-              active={currentView === 'matches'}
-              onClick={() => setCurrentView('matches')}
-              icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-              label="Jogos"
-            />
-            <NavButton
-              active={currentView === 'stats'}
-              onClick={() => setCurrentView('stats')}
-              icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>}
-              label="Estatísticas"
-            />
-            <NavButton
-              active={currentView === 'players'}
-              onClick={() => setCurrentView('players')}
-              icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
-              label="Membros"
-            />
-            <NavButton
-              active={currentView === 'fields'}
-              onClick={() => setCurrentView('fields')}
-              icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
-              label="Campos"
-            />
-
-            {isAdmin && (
+            
+            {currentUser.role === 'field_owner' && (
               <>
-                <div className="text-xs font-bold text-navy-500 uppercase tracking-wider px-4 mb-2 mt-6">Administração</div>
-                <NavButton
-                  active={currentView === 'financial'}
-                  onClick={() => setCurrentView('financial')}
-                  icon={<span className="text-lg">💰</span>}
-                  label="Financeiro"
+                 <div className="text-xs font-bold text-navy-500 uppercase tracking-wider px-4 mb-2 mt-2">Área do Dono</div>
+                 <NavButton
+                  active={currentView === 'owner_dashboard'}
+                  onClick={() => setCurrentView('owner_dashboard')}
+                  icon={<span className="text-lg">🏢</span>}
+                  label="Painel do Dono"
                 />
+              </>
+            )}
+
+            {activeGroup && (
+              <>
+                <div className="text-xs font-bold text-navy-500 uppercase tracking-wider px-4 mb-2 mt-4">Menu Principal</div>
+
+                <NavButton
+                  active={currentView === 'dashboard'}
+                  onClick={() => setCurrentView('dashboard')}
+                  icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>}
+                  label="Início"
+                />
+                <NavButton
+                  active={currentView === 'matches'}
+                  onClick={() => setCurrentView('matches')}
+                  icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                  label="Jogos"
+                />
+                <NavButton
+                  active={currentView === 'stats'}
+                  onClick={() => setCurrentView('stats')}
+                  icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>}
+                  label="Estatísticas"
+                />
+                <NavButton
+                  active={currentView === 'players'}
+                  onClick={() => setCurrentView('players')}
+                  icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
+                  label="Membros"
+                />
+                <NavButton
+                  active={currentView === 'fields'}
+                  onClick={() => setCurrentView('fields')}
+                  icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
+                  label="Campos"
+                />
+
+                {isAdmin && (
+                  <>
+                    <div className="text-xs font-bold text-navy-500 uppercase tracking-wider px-4 mb-2 mt-6">Administração</div>
+                    <NavButton
+                      active={currentView === 'financial'}
+                      onClick={() => setCurrentView('financial')}
+                      icon={<span className="text-lg">💰</span>}
+                      label="Financeiro"
+                    />
+                  </>
+                )}
               </>
             )}
           </div>
@@ -782,6 +822,9 @@ const App: React.FC = () => {
                 {/* Same Dropdown as Mobile but positioned differently */}
                 <button onClick={() => setCurrentView('profile')} className="w-full text-left px-4 py-3 text-sm hover:bg-navy-50 flex items-center gap-3">👤 Minha Conta</button>
                 <button onClick={() => setCurrentView('groups')} className="w-full text-left px-4 py-3 text-sm hover:bg-navy-50 flex items-center gap-3">👥 Meus Grupos</button>
+                {currentUser.role === 'field_owner' && (
+                  <button onClick={() => setCurrentView('owner_dashboard')} className="w-full text-left px-4 py-3 text-sm hover:bg-navy-50 flex items-center gap-3">🏢 Painel do Dono</button>
+                )}
                 <div className="border-t border-navy-50 my-1"></div>
                 <button onClick={() => setShowLogoutModal(true)} className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3">🚪 Sair da conta</button>
               </div>
@@ -791,7 +834,7 @@ const App: React.FC = () => {
       </nav>
 
       {/* Main Content Area */}
-      <main className={`flex-1 p-4 md:p-8 overflow-y-auto bg-navy-50 relative ${activeGroup ? 'pb-24 md:pb-8' : ''}`}>
+      <main className={`flex-1 p-4 md:p-8 overflow-y-auto bg-navy-50 relative ${(activeGroup || currentUser?.role === 'field_owner') ? 'pb-24 md:pb-8' : ''}`}>
         {isDataLoading && <Preloader overlay text="Sincronizando..." />}
         {currentView !== 'matches' && (
           <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -802,13 +845,15 @@ const App: React.FC = () => {
                     currentView === 'groups' ? 'Meus Grupos' :
                       currentView === 'profile' ? 'Minha Conta' :
                         currentView === 'stats' ? 'Estatísticas' :
-                          currentView === 'financial' ? 'Financeiro' : 'Locais'}
+                          currentView === 'financial' ? 'Financeiro' :
+                            currentView === 'owner_dashboard' ? 'Painel do Dono' : 'Locais'}
               </h2>
               <p className="text-navy-500 text-sm mt-1 font-medium">
                 {currentView === 'dashboard' ? `E ae  ${currentUser.name.split(' ')[0]}! Tudo pronto para o jogo?` :
                   currentView === 'groups' ? 'Gerencie seus times' :
                     currentView === 'profile' ? 'Atualize seus dados pessoais' :
-                      currentView === 'financial' ? 'Controle financeiro transparente' : 'Gestão profissional do grupo.'}
+                      currentView === 'financial' ? 'Controle financeiro transparente' :
+                        currentView === 'owner_dashboard' ? 'Gerencie suas quadras e agendamentos' : 'Gestão profissional do grupo.'}
               </p>
             </div>
           </header>
@@ -846,39 +891,52 @@ const App: React.FC = () => {
       )}
 
       {/* Mobile Tab Bar */}
-      {activeGroup && (
+      {(activeGroup || currentUser.role === 'field_owner') && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-navy-950/95 backdrop-blur-xl border-t border-navy-800 px-2 py-3 pb-6 z-40 flex items-center justify-around shadow-[0_-10px_25px_rgba(0,0,0,0.3)]">
-          <TabButton
-            active={currentView === 'dashboard'}
-            onClick={() => setCurrentView('dashboard')}
-            icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>}
-            label="Início"
-          />
-          <TabButton
-            active={currentView === 'matches'}
-            onClick={() => setCurrentView('matches')}
-            icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-            label="Jogos"
-          />
-          <TabButton
-            active={currentView === 'players'}
-            onClick={() => setCurrentView('players')}
-            icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
-            label="Jogadores"
-          />
-          <TabButton
-            active={currentView === 'fields'}
-            onClick={() => setCurrentView('fields')}
-            icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
-            label="Campos"
-          />
-          {(isAdmin || activeGroup.adminId === currentUser.id) && (
-            <TabButton
-              active={currentView === 'financial'}
-              onClick={() => setCurrentView('financial')}
-              icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-              label="Financeiro"
+          {currentUser.role === 'field_owner' && (
+             <TabButton
+              active={currentView === 'owner_dashboard'}
+              onClick={() => setCurrentView('owner_dashboard')}
+              icon={<span className="text-xl">🏢</span>}
+              label="Dono"
             />
+          )}
+          
+          {activeGroup && (
+            <>
+              <TabButton
+                active={currentView === 'dashboard'}
+                onClick={() => setCurrentView('dashboard')}
+                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>}
+                label="Início"
+              />
+              <TabButton
+                active={currentView === 'matches'}
+                onClick={() => setCurrentView('matches')}
+                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                label="Jogos"
+              />
+              <TabButton
+                active={currentView === 'players'}
+                onClick={() => setCurrentView('players')}
+                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
+                label="Jogadores"
+              />
+              <TabButton
+                active={currentView === 'fields'}
+                onClick={() => setCurrentView('fields')}
+                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
+                label="Campos"
+              />
+              {(isAdmin || activeGroup.adminId === currentUser.id) && (
+                <TabButton
+                  active={currentView === 'financial'}
+                  onClick={() => setCurrentView('financial')}
+                  icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                  label="Financeiro"
+                />
+              )}
+            </>
           )}
         </div>
       )}

@@ -106,21 +106,53 @@ export async function ensureSchema() {
   await sql(`ALTER TABLE group_players ALTER COLUMN id SET DEFAULT gen_random_uuid()`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_group_players_player_id ON group_players(player_id)`);
 
+  // 3.5 Venues (Locais esportivos do Dono de Campo)
+  await sql(`CREATE TABLE IF NOT EXISTS venues(
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    address TEXT,
+    city TEXT,
+    contact_name TEXT,
+    contact_phone TEXT,
+    coordinates_lat REAL,
+    coordinates_lng REAL,
+    description TEXT,
+    photos TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT
+  );`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_venues_owner_id ON venues(owner_id)`);
+
   // 4. Fields
   await sql(`CREATE TABLE IF NOT EXISTS fields(
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
     group_id TEXT REFERENCES groups(id) ON DELETE CASCADE,
+    owner_id TEXT REFERENCES players(id) ON DELETE CASCADE,
+    venue_id TEXT REFERENCES venues(id) ON DELETE CASCADE,
+    type TEXT,
     name TEXT NOT NULL,
     location TEXT,
     contact_name TEXT,
     contact_phone TEXT,
     hourly_rate REAL,
     coordinates_lat REAL,
-    coordinates_lng REAL
+    coordinates_lng REAL,
+    description TEXT,
+    photos TEXT,
+    city TEXT,
+    is_active INTEGER DEFAULT 1
   );`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_fields_group_id ON fields(group_id)`);
+  
   // 4. Fields migrations
   await sql(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS group_id TEXT`);
+  await sql(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS owner_id TEXT REFERENCES players(id) ON DELETE CASCADE`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_fields_owner_id ON fields(owner_id)`);
+  await sql(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS venue_id TEXT REFERENCES venues(id) ON DELETE CASCADE`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_fields_venue_id ON fields(venue_id)`);
+  await sql(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS type TEXT`);
+  
   await sql(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS name TEXT`);
   await sql(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS location TEXT`);
   await sql(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS contact_name TEXT`);
@@ -128,6 +160,24 @@ export async function ensureSchema() {
   await sql(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS hourly_rate REAL`);
   await sql(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS coordinates_lat REAL`);
   await sql(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS coordinates_lng REAL`);
+  await sql(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS description TEXT`);
+  await sql(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS photos TEXT`);
+  await sql(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS city TEXT`);
+  await sql(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS is_active INTEGER DEFAULT 1`);
+
+  // 4.5 Field Slots (Availability)
+  await sql(`CREATE TABLE IF NOT EXISTS field_slots(
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+    field_id TEXT NOT NULL REFERENCES fields(id) ON DELETE CASCADE,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    price REAL,
+    is_booked INTEGER DEFAULT 0,
+    booked_by_group_id TEXT REFERENCES groups(id) ON DELETE SET NULL,
+    created_at TEXT
+  );`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_field_slots_field_id ON field_slots(field_id)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_field_slots_start_time ON field_slots(start_time)`);
 
   // 5. Matches
   await sql(`CREATE TABLE IF NOT EXISTS matches(
@@ -149,6 +199,7 @@ export async function ensureSchema() {
   await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS arrived_player_ids TEXT`);
   await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS sub_matches TEXT`);
   await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS mvp_votes TEXT`);
+  await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS is_canceled INTEGER DEFAULT 0`);
 
   // 6. Transactions
   await sql(`CREATE TABLE IF NOT EXISTS transactions(

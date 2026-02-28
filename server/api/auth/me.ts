@@ -15,7 +15,7 @@ export default async function (req: any, res: any) {
     const userId = String(payload.sub || '');
 
     const sql = await ready();
-    const rows = await sql(`SELECT id, name, email, phone, avatar, birth_date, favorite_team, primary_group_id, usuario FROM players WHERE id = $1`, [userId]) as any[];
+    const rows = await sql(`SELECT id, name, email, phone, avatar, birth_date, favorite_team, primary_group_id, usuario, role FROM players WHERE id = $1`, [userId]) as any[];
 
     if (!rows.length) {
       res.statusCode = 404;
@@ -33,7 +33,8 @@ export default async function (req: any, res: any) {
       birthDate: row.birth_date || null,
       favoriteTeam: row.favorite_team || null,
       primaryGroupId: row.primary_group_id || undefined,
-      usuario: !!row.usuario
+      usuario: !!row.usuario,
+      role: row.role || 'user'
     };
 
     res.statusCode = 200;

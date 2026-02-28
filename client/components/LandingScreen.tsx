@@ -30,6 +30,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({ onLoginSuccess }) 
   const [birthDate, setBirthDate] = useState('');
   const [phone, setPhone] = useState('');
   const [favoriteTeam, setFavoriteTeam] = useState('');
+  const [role, setRole] = useState('user'); // 'user' or 'field_owner'
   const [avatar, setAvatar] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
 
@@ -147,6 +148,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({ onLoginSuccess }) 
           birthDate,
           phone: phone.replace(/\D/g, ''),
           favoriteTeam,
+          role,
           avatar
         });
       }
@@ -379,6 +381,21 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({ onLoginSuccess }) 
                 </div>
 
 
+
+                <div className="md:col-span-2">
+                  <div className="flex items-center gap-3 p-4 border border-navy-100 rounded-xl bg-white hover:border-navy-200 transition-all cursor-pointer" onClick={() => setRole(role === 'user' ? 'field_owner' : 'user')}>
+                    <input
+                      type="checkbox"
+                      checked={role === 'field_owner'}
+                      onChange={(e) => setRole(e.target.checked ? 'field_owner' : 'user')}
+                      className="w-5 h-5 rounded text-brand-600 focus:ring-brand-500 cursor-pointer"
+                    />
+                    <div>
+                      <span className="block text-sm font-bold text-navy-800">Sou Dono de Campo</span>
+                      <span className="block text-xs text-navy-500">Quero gerenciar meus campos e aluguéis</span>
+                    </div>
+                  </div>
+                </div>
 
                 <div className="md:col-span-2">
                   <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seu@email.com" required />

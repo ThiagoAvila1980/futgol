@@ -247,6 +247,10 @@ export const storage = {
     delete: async (id: string): Promise<void> => {
       await api.delete(`/api/matches/${encodeURIComponent(id)}/`);
     },
+    cancel: async (id: string): Promise<Match> => {
+      const data = await api.post(`/api/matches/${encodeURIComponent(id)}/cancel/`, {});
+      return data as Match;
+    },
     reopen: async (id: string): Promise<Match> => {
       const data = await api.post(`/api/matches/${encodeURIComponent(id)}/reopen/`, {});
       return data as Match;

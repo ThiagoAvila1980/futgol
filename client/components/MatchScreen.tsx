@@ -80,7 +80,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
     } catch { return 6; }
   });
   const [subMatches, setSubMatches] = useState<SubMatch[]>([]);
-  const [draggingPlayer, setDraggingPlayer] = useState<{ playerId: string, subMatchId: string, fromTeam: 'A' | 'B' } | null>(null);
+  const [draggingPlayer, setDraggingPlayer] = useState<{ playerId: string, source: 'team' | 'queue', subMatchId?: string, fromTeam?: 'A' | 'B' } | null>(null);
   const [dragOverTeam, setDragOverTeam] = useState<{ subMatchId: string, team: 'A' | 'B' } | null>(null);
   const [touchDragPosition, setTouchDragPosition] = useState<{ x: number, y: number } | null>(null);
   const [isTouchDragging, setIsTouchDragging] = useState(false);
@@ -837,19 +837,43 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
 
   const handleDragStart = (playerId: string, subMatchId: string, fromTeam: 'A' | 'B') => {
     if (!isAdmin) return;
-    setDraggingPlayer({ playerId, subMatchId, fromTeam });
+    setDraggingPlayer({ playerId, source: 'team', subMatchId, fromTeam });
+  };
+
+  const handleQueueDragStart = (playerId: string) => {
+    if (!isAdmin) return;
+    setDraggingPlayer({ playerId, source: 'queue' });
   };
 
   const handleDragOver = (e: React.DragEvent, subMatchId: string, team: 'A' | 'B') => {
     e.preventDefault();
-    if (draggingPlayer && draggingPlayer.subMatchId === subMatchId && draggingPlayer.fromTeam !== team) {
+    if (!draggingPlayer) return;
+    if (draggingPlayer.source === 'team') {
+      if (draggingPlayer.subMatchId === subMatchId && draggingPlayer.fromTeam !== team) {
+        setDragOverTeam({ subMatchId, team });
+      }
+    } else {
       setDragOverTeam({ subMatchId, team });
     }
   };
 
   const handleDrop = async (subMatchId: string, toTeam: 'A' | 'B') => {
     setDragOverTeam(null);
-    if (!draggingPlayer || draggingPlayer.subMatchId !== subMatchId || draggingPlayer.fromTeam === toTeam) {
+    if (!draggingPlayer) {
+      setDraggingPlayer(null);
+      return;
+    }
+
+    if (draggingPlayer.source === 'queue') {
+      const p = playablePlayers.find(pl => pl.id === draggingPlayer.playerId);
+      if (p) {
+        await handleAddPlayerToSubMatch(subMatchId, toTeam, p);
+      }
+      setDraggingPlayer(null);
+      return;
+    }
+
+    if (draggingPlayer.subMatchId !== subMatchId || draggingPlayer.fromTeam === toTeam) {
       setDraggingPlayer(null);
       return;
     }
@@ -962,7 +986,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                 {arrivedPlayers.map((p, idx) => {
                   const isPlaying = subMatches.some(sm => !sm.finished && (sm.teamA.some(tp => tp.id === p.id) || sm.teamB.some(tp => tp.id === p.id)));
                   return (
-                    <div key={p.id} onClick={() => isAdmin && !isPlaying && toggleArrival(selectedMatch.id, p.id)} className={cn("flex items-center justify-between p-3 rounded-xl border transition-all shadow-sm", isPlaying ? "opacity-40 grayscale" : "bg-white cursor-pointer hover:border-navy-900")}>
+                    <div key={p.id} onClick={() => isAdmin && !isPlaying && toggleArrival(selectedMatch.id, p.id)} draggable={isAdmin && !isPlaying} onDragStart={() => isAdmin && !isPlaying && handleQueueDragStart(p.id)} onDragEnd={() => setDraggingPlayer(null)} className={cn("flex items-center justify-between p-1 rounded-xl border transition-all shadow-sm", isPlaying ? "opacity-40 grayscale" : "bg-white cursor-grab hover:border-navy-900")}>
                       <div className="flex items-center gap-2">
                         <span className="text-[14px] font-black text-navy-400 w-4">{idx + 1}º</span>
                         <span className={cn("w-1 h-6 rounded-full", p.position === Position.GOLEIRO ? "bg-red-500" : p.position === Position.DEFENSOR ? "bg-orange-500" : p.position === Position.MEIO ? "bg-blue-500" : "bg-green-500")} />
@@ -1180,7 +1204,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
             <p className="text-navy-500 font-bold">{selectedMatch.date.split('-').reverse().join('/')} às {selectedMatch.time}</p>
           </div>
           <div className="flex gap-2">
-            {!selectedMatch.finished && (
+            {!selectedMatch.finished && !selectedMatch.isCanceled && (
               <Button
                 onClick={() => setView('queue')}
                 className="bg-amber-500 hover:bg-amber-600 text-black border-none shadow-lg shadow-amber-500/20 flex items-center gap-2"
@@ -1199,7 +1223,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                 Arena
               </Button>
             )}
-            {isAdmin && !selectedMatch.finished && (
+            {isAdmin && !selectedMatch.finished && !selectedMatch.isCanceled && (
               <Button
                 onClick={() => setIsFinishing(true)}
                 variant="danger"
@@ -1374,8 +1398,14 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
         {matches.filter(m => m.date.startsWith(selectedMonth)).sort((a, b) => b.date.localeCompare(a.date)).map(match => {
           const field = fields.find(f => f.id === match.fieldId);
           const dateObj = new Date(match.date + 'T00:00:00');
+          const now = new Date();
+          const todayStr = new Date().toISOString().slice(0, 10);
+          const startAt = new Date(`${match.date}T${(match.time || '00:00')}:00`);
+          const status = match.isCanceled ? 'canceled' : (match.finished ? 'finished' : ((match.date === todayStr && now.getTime() >= startAt.getTime()) ? 'live' : 'scheduled'));
+          const statusText = status === 'canceled' ? 'Cancelada' : status === 'finished' ? 'Encerrada' : status === 'live' ? 'Em andamento' : 'Marcada';
+          const statusTextClass = status === 'canceled' ? 'text-red-600' : status === 'finished' ? 'text-orange-500' : status === 'live' ? 'text-green-600' : 'text-blue-600';
           return (
-            <Card key={match.id} onClick={() => { setSelectedMatch(match); setView('details'); }} className="group relative cursor-pointer hover:border-navy-900 border-2 border-transparent transition-all p-5 bg-white shadow-xl shadow-navy-900/5">
+            <Card key={match.id} onClick={() => { setSelectedMatch(match); setView('details'); }} className={cn("group relative cursor-pointer hover:border-navy-900 border-2 border-transparent transition-all p-5 bg-white shadow-xl shadow-navy-900/5", match.isCanceled ? "" : "")}>
               <div className="flex items-start gap-4">
                 <div className={cn(
                   "flex flex-col items-center rounded-2xl p-3 min-w-[70px] shadow-lg transition-colors",
@@ -1392,13 +1422,14 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                   <p className="text-sm font-bold text-navy-400 mt-1 flex items-center gap-2"><span>🕒 {match.time}</span></p>
                   <div className="mt-4 flex items-center gap-3">
                     <div className="bg-navy-50 px-3 py-1 rounded-full"><span className="text-[10px] font-black text-navy-600 uppercase">{match.confirmedPlayerIds.length} Atletas</span></div>
-                    <span className={cn("text-[9px] font-black uppercase tracking-widest", match.finished ? "text-navy-300" : "text-brand-500 animate-pulse")}>{match.finished ? 'Encerrado' : 'Disponível'}</span>
+                    <span className={cn("text-[9px] font-black uppercase tracking-widest", statusTextClass)}>{statusText}</span>
                   </div>
                 </div>
               </div>
+              <div className="pointer-events-none absolute inset-0 rounded-[inherit]" style={{ boxShadow: `inset 0 0 0 3px ${status === 'canceled' ? 'rgba(220, 38, 38, 0.35)' : status === 'finished' ? 'rgba(249, 115, 22, 0.35)' : status === 'live' ? 'rgba(22, 163, 74, 0.35)' : 'rgba(37, 99, 235, 0.35)'}` }} />
 
               {/* Quick Actions (Edit/Delete) - ALWAYS VISIBLE FOR ADMINS */}
-              {isAdmin && !match.finished && (
+              {isAdmin && !match.finished && !match.isCanceled && (
                 <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={(e) => { e.stopPropagation(); handleEditMatch(match); }}
@@ -1410,9 +1441,12 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                   <button
                     onClick={(e) => { e.stopPropagation(); setMatchToDelete(match.id); }}
                     className="p-2 bg-white rounded-xl shadow-lg border border-navy-100 text-navy-400 hover:text-red-600 hover:border-red-200 transition-all"
-                    title="Excluir Partida"
+                    title="Cancelar Partida"
                   >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 11-12.728 12.728 9 9 0 0112.728-12.728z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6.343 17.657l11.314-11.314" />
+                    </svg>
                   </button>
                 </div>
               )}
@@ -1444,8 +1478,8 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
         </form>
       </Modal>
 
-      <Modal isOpen={!!matchToDelete} onClose={() => setMatchToDelete(null)} title="Excluir Jogo">
-        <p className="text-navy-600 mb-8 font-medium">Tem certeza que deseja cancelar esta pelada? Todos os dados de presença e pagamentos serão perdidos.</p>
+      <Modal isOpen={!!matchToDelete} onClose={() => setMatchToDelete(null)} title="Cancelar Jogo">
+        <p className="text-navy-600 mb-8 font-medium">Tem certeza que deseja cancelar esta pelada? Os dados ficarão preservados, mas o jogo ficará marcado como cancelado.</p>
         <div className="flex gap-4"><Button variant="ghost" className="flex-1 h-12" onClick={() => setMatchToDelete(null)}>Manter</Button><Button variant="danger" className="flex-1 h-12 shadow-lg shadow-red-500/20" onClick={confirmDelete}>Sim, Cancelar</Button></div>
       </Modal>
     </div>

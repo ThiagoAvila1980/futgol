@@ -16,7 +16,7 @@ export default async function (req: any, res: any) {
         try { body = JSON.parse(Buffer.concat(chunks).toString() || '{}'); } catch { body = {}; }
     }
 
-    const { email, password, name, phone, nickname, birthDate, favoriteTeam, position, avatar } = body;
+    const { email, password, name, phone, nickname, birthDate, favoriteTeam, position, avatar, role } = body;
 
     if (!email || !password || !name) {
         res.statusCode = 400;
@@ -25,6 +25,7 @@ export default async function (req: any, res: any) {
     }
 
     const cleanPhone = phone ? String(phone).replace(/\D/g, '') : null;
+    const userRole = role === 'field_owner' ? 'field_owner' : 'user';
     const sql = await ready();
 
     // 1. Check for existing records by Email or Phone
@@ -70,18 +71,18 @@ export default async function (req: any, res: any) {
                 email = $2, 
                 password_hash = $3, 
                 name = $4, 
-                role = 'user', 
+                role = $6, 
                 usuario = true,
-                avatar = COALESCE($6, avatar),
+                avatar = COALESCE($7, avatar),
                 created_at = COALESCE(created_at, $5)
             WHERE id = $1
-        `, [userId, email, hash, name, now, avatar || null]);
+        `, [userId, email, hash, name, now, userRole, avatar || null]);
     } else {
         // Create brand new player record with user status
         await sql(`
             INSERT INTO players(id, email, password_hash, name, phone, role, created_at, usuario, avatar)
-            VALUES($1, $2, $3, $4, $5, 'user', $6, true, $7)
-        `, [userId, email, hash, name, cleanPhone, now, avatar || null]);
+            VALUES($1, $2, $3, $4, $5, $6, $7, true, $8)
+        `, [userId, email, hash, name, cleanPhone, userRole, now, avatar || null]);
     }
 
     // Update Player Profile Fields directly in players table
@@ -97,13 +98,14 @@ export default async function (req: any, res: any) {
 
     // Generate Token
     const secret = process.env.JWT_SECRET || 'dev-secret';
-    const token = jwt.sign({ sub: userId, email: email, role: 'user' }, secret, { expiresIn: '7d' });
+    const token = jwt.sign({ sub: userId, email: email, role: userRole }, secret, { expiresIn: '7d' });
 
     const userObj = {
         id: userId,
         name,
         email,
         nickname,
+        role: userRole,
         phone: cleanPhone,
         avatar: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
     };

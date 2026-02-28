@@ -22,6 +22,7 @@ import fieldsId from '../api/fields/[id]';
 import matchesIndex from '../api/matches';
 import matchesId from '../api/matches/[id]';
 import matchesReopen from '../api/matches/[id]/reopen';
+import matchesCancel from '../api/matches/[id]/cancel';
 import matchesVote from '../api/matches/[id]/vote';
 import matchesVotes from '../api/matches/[id]/votes';
 import groupsMembers from '../api/groups/[id]/members';
@@ -107,6 +108,7 @@ app.get('/api/matches', matchesIndex);
 app.put('/api/matches/:id', matchesId);
 app.delete('/api/matches/:id', matchesId);
 app.post('/api/matches/:id/reopen', matchesReopen);
+app.post('/api/matches/:id/cancel', matchesCancel);
 app.post('/api/matches/:id/vote', matchesVote);
 app.get('/api/matches/:id/votes', matchesVotes);
 
@@ -116,6 +118,28 @@ app.delete('/api/transactions/:id', transactionsId);
 app.post('/api/transactions/upsert_match', transactionsUpsertMatch);
 app.post('/api/transactions/upsert_monthly', transactionsUpsertMonthly);
 
+import ownerFieldsIndex from '../api/owner/fields/index';
+import ownerFieldsId from '../api/owner/fields/[id]';
+import ownerFieldsSlots from '../api/owner/fields/[id]/slots';
+import fieldsSearch from '../api/fields/search';
+
+app.get('/api/owner/fields', ownerFieldsIndex);
+app.post('/api/owner/fields', ownerFieldsIndex);
+app.put('/api/owner/fields/:id', ownerFieldsId);
+app.delete('/api/owner/fields/:id', ownerFieldsId);
+app.get('/api/owner/fields/:id/slots', ownerFieldsSlots);
+app.post('/api/owner/fields/:id/slots', ownerFieldsSlots);
+app.delete('/api/owner/fields/:id/slots', ownerFieldsSlots);
+
+import ownerVenuesIndex from '../api/owner/venues/index';
+import ownerVenuesId from '../api/owner/venues/[id]';
+app.get('/api/owner/venues', ownerVenuesIndex);
+app.post('/api/owner/venues', ownerVenuesIndex);
+app.put('/api/owner/venues/:id', ownerVenuesId);
+app.delete('/api/owner/venues/:id', ownerVenuesId);
+
+app.get('/api/fields/search', fieldsSearch);
+
 const frontendDist = path.resolve(process.cwd(), '../client/dist');
 const indexHtml = path.join(frontendDist, 'index.html');
 import fs from 'fs';
@@ -124,6 +148,15 @@ const hasFrontend = fs.existsSync(indexHtml);
 if (hasFrontend) {
   app.use(express.static(frontendDist));
 }
+
+// Static uploads directory
+const uploadsDir = path.resolve(process.cwd(), 'uploads');
+try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
+app.use('/uploads', express.static(uploadsDir));
+
+// Uploads API
+import uploadsIndex from '../api/uploads/index';
+app.post('/api/uploads', uploadsIndex);
 
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) {
@@ -138,8 +171,9 @@ app.get('*', (req, res) => {
 
 // Run migrations on startup
 ensureSchema().then(() => {
-  app.listen(3001, '0.0.0.0', () => {
-    console.log('Server running on http://0.0.0.0:3001');
+  const PORT = Number(process.env.PORT || 3001);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }).catch(err => {
   console.error('Failed to initialize DB:', err);

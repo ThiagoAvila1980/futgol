@@ -58,7 +58,8 @@ export default async function (req: any, res: any) {
     scoreB: Number(m.score_b || 0),
     finished: !!m.finished,
     mvpId: m.mvp_id || undefined,
-    subMatches: m.sub_matches ? JSON.parse(m.sub_matches) : []
+    subMatches: m.sub_matches ? JSON.parse(m.sub_matches) : [],
+    isCanceled: !!m.is_canceled
   }));
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/json');

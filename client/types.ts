@@ -20,6 +20,7 @@ export interface User {
   position?: Position;
   primaryGroupId?: string; // ID do grupo principal do usuário
   usuario?: boolean;
+  role?: 'user' | 'field_owner' | 'admin';
 }
 
 export interface Player {
@@ -71,18 +72,46 @@ export interface Group {
   city?: string;
 }
 
+export interface FieldSlot {
+  id: string;
+  fieldId: string;
+  startTime: string;
+  endTime: string;
+  price: number;
+  isBooked: boolean;
+  bookedByGroupId?: string;
+}
+
 export interface Field {
   id: string;
-  groupId: string; // Links field to a specific group
+  groupId?: string; // Optional if owner managed
+  ownerId?: string; // New: Owner managed
+  venueId?: string; // New: Link to venue (local esportivo)
+  type?: 'society' | 'quadra' | 'profissional' | string;
   name: string;
   location: string;
-  contactName?: string;
-  contactPhone?: string;
   hourlyRate: number;
   coordinates?: {
     lat: number;
     lng: number;
   };
+  description?: string;
+  photos?: string[];
+  isActive?: boolean;
+}
+
+export interface Venue {
+  id: string;
+  ownerId?: string;
+  name: string;
+  address?: string;
+  city?: string;
+  contactName?: string;
+  contactPhone?: string;
+  coordinates?: { lat: number; lng: number };
+  description?: string;
+  photos?: string[];
+  isActive?: boolean;
 }
 
 export interface Team {
@@ -119,6 +148,7 @@ export interface Match {
   mvpId?: string; // ID of the "Man of the Match"
   mvpVotes?: Record<string, string>; // voterId -> candidateId
   subMatches?: SubMatch[];
+  isCanceled?: boolean;
 }
 
 // New Financial Types
@@ -147,4 +177,4 @@ export interface Transaction {
   paidPlayerIds?: string[]; // IDs of players who contributed to an aggregated transaction
 }
 
-export type ViewState = 'dashboard' | 'players' | 'fields' | 'matches' | 'groups' | 'profile' | 'financial' | 'stats';
+export type ViewState = 'dashboard' | 'players' | 'fields' | 'matches' | 'groups' | 'profile' | 'financial' | 'stats' | 'owner_dashboard';
