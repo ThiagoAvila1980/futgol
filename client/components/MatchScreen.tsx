@@ -988,7 +988,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Sidebar: Presentes (Top on Mobile, Left on Desktop) */}
           <div className="lg:col-span-4 lg:order-1 lg:sticky lg:top-10">
-            <Card className="p-6 shadow-2xl border-1 border-navy-900 bg-gray-200 fixed flex flex-col gap-4">
+            <Card className="p-6 shadow-2xl border-1 border-navy-900 bg-gray-200 relative flex flex-col gap-4">
               {/* Lista de Jogadores de Linha */}
               <div>
                 <h4 className="text-xl font-black mb-2 flex items-center gap-2">
