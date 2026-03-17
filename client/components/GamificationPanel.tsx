@@ -63,6 +63,21 @@ const BADGE_ICONS: Record<string, string> = {
   group_founder: '🛡️',
 };
 
+const BADGE_LABELS_PT: Record<string, string> = {
+  first_match: 'Primeiro jogo',
+  mvp_first: 'Primeiro MVP',
+  mvp_5: '5x MVP',
+  mvp_10: '10x MVP',
+  matches_10: '10 jogos disputados',
+  matches_50: '50 jogos disputados',
+  matches_100: '100 jogos disputados',
+  streak_5: 'Sequência de 5 jogos seguidos',
+  streak_10: 'Sequência de 10 jogos seguidos',
+  top_scorer_month: 'Artilheiro do mês',
+  perfect_attendance: 'Presença perfeita',
+  group_founder: 'Fundador do grupo',
+};
+
 const LEVEL_TITLES = [
   'Iniciante', 'Amador', 'Regular', 'Titular', 'Destaque',
   'Profissional', 'Craque', 'Lenda', 'Imortal', 'Hall da Fama'
@@ -366,8 +381,8 @@ export const GamificationPanel: React.FC<GamificationPanelProps> = ({
                     earned ? 'bg-brand-50 border-brand-200' : 'bg-navy-50 border-navy-100 opacity-50'
                   )}>
                     <div className="text-2xl">{icon}</div>
-                    <div className="text-[10px] font-medium mt-1 text-navy-600 capitalize">
-                      {key.replace(/_/g, ' ')}
+                    <div className="text-[10px] font-medium mt-1 text-navy-600">
+                      {BADGE_LABELS_PT[key] || key.replace(/_/g, ' ')}
                     </div>
                     {earned && <span className="text-[10px] text-brand-600 font-bold">✓</span>}
                   </div>

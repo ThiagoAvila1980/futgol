@@ -188,4 +188,4 @@ export interface Transaction {
   paidPlayerIds?: string[]; // IDs of players who contributed to an aggregated transaction
 }
 
-export type ViewState = 'dashboard' | 'players' | 'fields' | 'matches' | 'groups' | 'profile' | 'financial' | 'stats' | 'owner_dashboard' | 'marketplace' | 'gamification';
+export type ViewState = 'dashboard' | 'players' | 'fields' | 'matches' | 'groups' | 'profile' | 'financial' | 'owner_dashboard' | 'marketplace' | 'gamification';

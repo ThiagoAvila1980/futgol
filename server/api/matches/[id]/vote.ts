@@ -72,10 +72,13 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    // 2. Insert vote
+    // 2. Insert or update vote (permite trocar voto enquanto a votação estiver aberta)
     await sql(`
       INSERT INTO match_votes (match_id, voter_id, voted_for_id, created_at)
       VALUES ($1, $2, $3, $4)
+      ON CONFLICT (match_id, voter_id)
+      DO UPDATE SET voted_for_id = EXCLUDED.voted_for_id,
+                    created_at = EXCLUDED.created_at
     `, [id as string, voterId, votedForId, new Date().toISOString()]);
 
     res.statusCode = 200;
@@ -84,12 +87,6 @@ export default async function handler(req: any, res: any) {
     return;
 
   } catch (error: any) {
-    if (error.code === '23505') { // Unique violation (idx_match_votes_unique_voter)
-      res.statusCode = 400;
-      res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ error: 'User already voted for this match' }));
-      return;
-    }
     console.error('Vote error:', error);
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json');

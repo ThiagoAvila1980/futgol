@@ -9,7 +9,6 @@ import { GroupsScreen } from './components/GroupsScreen';
 import { OwnerDashboard } from './components/OwnerDashboard';
 import { ProfileScreen } from './components/ProfileScreen';
 import { FinancialScreen } from './components/FinancialScreen';
-import { StatsScreen } from './components/StatsScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GamificationPanel } from './components/GamificationPanel';
 import { WhatsAppShare } from './components/WhatsAppShare';
@@ -437,14 +436,6 @@ const App: React.FC = () => {
             players={players}
           />
         );
-      case 'stats':
-        return (
-          <StatsScreen
-            players={players}
-            matches={matches}
-            activeGroup={activeGroup!}
-          />
-        );
       case 'gamification':
         return (
           <ErrorBoundary>
@@ -556,15 +547,15 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* MVP / Stats Card */}
+              {/* MVP Card */}
               {topPlayer ? (
                 <div className="bg-gradient-to-br from-accent-400 to-accent-600 p-6 rounded-2xl text-white shadow-lg relative overflow-hidden">
                   <div className="relative z-10">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-accent-50 flex items-center gap-2 mb-4">
                       <span className="bg-white/20 p-1 rounded"><Trophy className="h-4 w-4" /></span>
-                      Estatísticas dos jogadores
+                      Craque da galera
                     </h3>
-                    <div onClick={() => setCurrentView('stats')} className="flex items-center gap-4 cursor-pointer">
+                    <div className="flex items-center gap-4">
                       <div className={cn(
                         "w-16 h-16 rounded-full flex items-center justify-center text-white border-2 border-white/40 font-black text-2xl shadow-lg",
                         topPlayer.isMonthlySubscriber ? "bg-green-500" :
@@ -586,10 +577,7 @@ const App: React.FC = () => {
                   <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.2),transparent_70%)]" />
                 </div>
               ) : (
-                <div
-                  onClick={() => setCurrentView('stats')}
-                  className="bg-green-50 p-6 rounded-2xl shadow-premium border border-navy-100 cursor-pointer hover:border-accent-400 transition-colors group flex flex-col justify-between"
-                >
+                <div className="bg-green-50 p-6 rounded-2xl shadow-premium border border-navy-100 group flex flex-col justify-between">
                   <div>
                     <h3 className="text-lg font-heading font-bold text-navy-800 group-hover:text-accent-600 transition-colors">Estatísticas dos jogadores</h3>
                     <p className="mt-2 text-navy-500 text-sm leading-relaxed">Acompanhe gols, assistências e frequência da galera.</p>
@@ -649,7 +637,6 @@ const App: React.FC = () => {
     players: { title: 'Jogadores', subtitle: 'Gestão profissional do grupo.' },
     groups: { title: 'Meus Grupos', subtitle: 'Gerencie seus times' },
     profile: { title: 'Minha Conta', subtitle: 'Atualize seus dados pessoais' },
-    stats: { title: 'Estatísticas', subtitle: 'Gestão profissional do grupo.' },
     financial: { title: 'Financeiro', subtitle: 'Controle financeiro transparente' },
     fields: { title: 'Locais', subtitle: 'Gestão profissional do grupo.' },
     owner_dashboard: { title: 'Painel do Dono', subtitle: 'Gerencie suas quadras e agendamentos' },

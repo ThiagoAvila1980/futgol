@@ -1776,6 +1776,18 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                   </button>
                 </div>
               )}
+
+              {/* Votação de MVP para confrontos encerrados (48h) */}
+              {status === 'finished' && (
+                <div className="mt-3">
+                  <MatchVoteCard
+                    match={match}
+                    currentUser={currentUser}
+                    currentPlayer={currentPlayer || undefined}
+                    players={playablePlayers}
+                  />
+                </div>
+              )}
             </Card>
           );
         })}

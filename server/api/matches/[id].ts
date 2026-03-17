@@ -1,4 +1,5 @@
 import { ready } from '../../api/_db';
+import { processAchievementsForMatch } from '../achievements/from_match';
 
 function safeParseJson<T>(raw: any, fallback: T): T {
   try {
@@ -96,6 +97,14 @@ export default async function (req: any, res: any) {
       ? body.playerPoints
       : computedPoints;
 
+    let wasFinished = false;
+    if (finalId) {
+      const existing = await sql(`SELECT finished FROM matches WHERE id = $1`, [finalId]) as any[];
+      if (existing[0]) {
+        wasFinished = !!existing[0].finished;
+      }
+    }
+
     const payload = {
       id: finalId,
       group_id: String(body.groupId || ''),
@@ -114,12 +123,14 @@ export default async function (req: any, res: any) {
       sub_matches: JSON.stringify(subMatches),
       player_points: JSON.stringify(playerPoints || {})
     };
+    let persistedId = finalId as string | undefined;
     if (payload.id == null) {
       const rows = await sql(`INSERT INTO matches(group_id, date, time, field_id, confirmed_player_ids, paid_player_ids, arrived_player_ids, team_a, team_b, score_a, score_b, finished, mvp_id, sub_matches, player_points)
                VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
         [payload.group_id, payload.date, payload.time, payload.field_id, payload.confirmed_player_ids, payload.paid_player_ids, payload.arrived_player_ids, payload.team_a, payload.team_b, payload.score_a, payload.score_b, payload.finished, payload.mvp_id, payload.sub_matches, payload.player_points]
       ) as any[];
       const newId = rows[0]?.id;
+      persistedId = String(newId);
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ ...payload, id: String(newId) }));
@@ -132,6 +143,15 @@ export default async function (req: any, res: any) {
       res.statusCode = 204;
       res.end('');
     }
+
+    if (payload.finished && !wasFinished && persistedId) {
+      try {
+        await processAchievementsForMatch(persistedId);
+      } catch (e) {
+        console.error('Failed to process achievements for match', persistedId, e);
+      }
+    }
+
     return;
   }
   if (req.method === 'DELETE') {

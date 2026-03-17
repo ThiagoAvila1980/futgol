@@ -16,6 +16,7 @@ export const MatchVoteCard: React.FC<MatchVoteCardProps> = ({ match, currentUser
   const [isLoading, setIsLoading] = useState(false);
   const [selectedCandidateId, setSelectedCandidateId] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   // Identify the voter
   const myId = currentPlayer?.id || currentUser.id;
@@ -33,7 +34,21 @@ export const MatchVoteCard: React.FC<MatchVoteCardProps> = ({ match, currentUser
   const loadVotes = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/matches/${match.id}/votes`);
+      const res = await fetch(`/api/matches/${match.id}/votes`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(typeof window !== 'undefined'
+            ? (() => {
+                try {
+                  const token = localStorage.getItem('futgol_jwt_token') || '';
+                  return token ? { Authorization: `Bearer ${token}` } : {};
+                } catch {
+                  return {};
+                }
+              })()
+            : {}),
+        },
+      });
       if (!res.ok) return;
       const data = await res.json();
 
@@ -43,6 +58,9 @@ export const MatchVoteCard: React.FC<MatchVoteCardProps> = ({ match, currentUser
         if (myVote) {
           setHasVoted(true);
           setVotedForId(myVote.votedForId);
+        } else {
+          setHasVoted(false);
+          setVotedForId(null);
         }
       }
     } catch (error) {
@@ -59,13 +77,26 @@ export const MatchVoteCard: React.FC<MatchVoteCardProps> = ({ match, currentUser
       setIsSending(true);
       const res = await fetch(`/api/matches/${match.id}/vote`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(typeof window !== 'undefined'
+            ? (() => {
+                try {
+                  const token = localStorage.getItem('futgol_jwt_token') || '';
+                  return token ? { Authorization: `Bearer ${token}` } : {};
+                } catch {
+                  return {};
+                }
+              })()
+            : {}),
+        },
         body: JSON.stringify({ voterId: myId, votedForId: selectedCandidateId })
       });
 
       if (res.ok) {
         setHasVoted(true);
         setVotedForId(selectedCandidateId);
+        setIsEditing(false);
         await loadVotes();
       } else {
         const err = await res.json();
@@ -94,7 +125,8 @@ export const MatchVoteCard: React.FC<MatchVoteCardProps> = ({ match, currentUser
         <h4 className="text-[12px] font-black text-black-400 uppercase tracking-widest">
           🗳️ Votação do Craque
         </h4>
-        {(hasVoted && !match.mvpId) && (
+        {/* Indicador de voto confirmado (quando não está editando) */}
+        {(hasVoted && !match.mvpId && !isEditing) && (
           <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full border border-green-100">
             Voto confirmado
           </span>
@@ -117,7 +149,13 @@ export const MatchVoteCard: React.FC<MatchVoteCardProps> = ({ match, currentUser
           );
         }
 
-        if (hasVoted) {
+        const matchDate = new Date(`${match.date}T${match.time || '00:00:00'}`);
+        const now = new Date();
+        const twoDaysInMs = 2 * 24 * 60 * 60 * 1000;
+        const isVotingClosed = now.getTime() - matchDate.getTime() > twoDaysInMs;
+
+        // Se já votou e a votação está encerrada, apenas mostra o voto atual
+        if (hasVoted && isVotingClosed) {
           return (
             <div className="flex items-center gap-2 p-2 bg-navy-50 rounded-lg border border-navy-100">
               <span className="text-lg">🎯</span>
@@ -131,19 +169,46 @@ export const MatchVoteCard: React.FC<MatchVoteCardProps> = ({ match, currentUser
           );
         }
 
-        const matchDate = new Date(`${match.date}T${match.time || '00:00:00'}`);
-        const now = new Date();
-        const twoDaysInMs = 2 * 24 * 60 * 60 * 1000;
-        const isVotingClosed = now.getTime() - matchDate.getTime() > twoDaysInMs;
-
         if (isVotingClosed) {
           return (
             <div className="text-[10px] font-bold text-navy-400 italic py-1">
-              Votação encerrada para esta partida.
+              Votação encerrada!
             </div>
           );
         }
 
+        // Se já votou e ainda está dentro do prazo, mostra o voto atual + botão para editar
+        if (hasVoted && !isEditing) {
+          return (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between p-2 bg-navy-50 rounded-lg border border-navy-100">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🎯</span>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-navy-400 font-bold uppercase">Seu voto</span>
+                    <span className="text-sm font-bold text-navy-800">
+                      {players.find(p => p.id === votedForId)?.nickname || players.find(p => p.id === votedForId)?.name || 'Desconhecido'}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditing(true);
+                    setSelectedCandidateId(votedForId || '');
+                  }}
+                  className="text-[10px] font-bold text-brand-700 hover:text-brand-900 flex items-center gap-1 px-2 py-1 rounded-full hover:bg-brand-50 border border-brand-100 transition-colors"
+                  title="Trocar voto"
+                >
+                  <span className="text-xs">🔄</span>
+                  Trocar voto
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        // Estado padrão (primeiro voto ou edição ativa)
         return (
           <div className="flex flex-col sm:flex-row gap-2">
             <select
@@ -165,7 +230,7 @@ export const MatchVoteCard: React.FC<MatchVoteCardProps> = ({ match, currentUser
               disabled={!selectedCandidateId}
               className="shrink-0 w-full sm:w-auto"
             >
-              Votar
+              {hasVoted ? 'Confirmar novo voto' : 'Votar'}
             </Button>
           </div>
         );
