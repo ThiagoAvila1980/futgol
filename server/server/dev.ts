@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import express from 'express';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
+import { authMiddleware } from '../api/middleware/auth';
 import health from '../api/health';
 import authLogin from '../api/auth/login';
 import authMe from '../api/auth/me';
@@ -36,16 +39,49 @@ import groupsDemoteMember from '../api/groups/[id]/demote_member';
 import groupsCancelRequest from '../api/groups/[id]/cancel_request';
 import groupsRejectRequest from '../api/groups/[id]/reject_request';
 import { ensureSchema } from '../api/_db';
+import rankingPoints from '../api/ranking/points';
 
 const app = express();
+
+// CORS
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production'
+    ? [process.env.CLIENT_URL || 'https://futgol.app']
+    : true,
+  credentials: true,
+}));
+
+// Rate limiting
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Muitas tentativas. Tente novamente em 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/', apiLimiter);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+// Strip trailing slashes
 app.use((req, res, next) => {
   if (req.path !== '/' && req.path.endsWith('/')) {
     req.url = req.url.replace(/\/+$/, '');
   }
   next();
 });
+
+// Global auth middleware
+app.use('/api', authMiddleware as any);
 
 app.get('/api/health', health);
 app.post('/api/admin/schema/align', schemaAlign);
@@ -112,6 +148,9 @@ app.post('/api/matches/:id/cancel', matchesCancel);
 app.post('/api/matches/:id/vote', matchesVote);
 app.get('/api/matches/:id/votes', matchesVotes);
 
+// Ranking por Pontos (Presença/Gols/Assistências)
+app.get('/api/ranking/points', rankingPoints);
+
 app.get('/api/transactions', transactionsIndex);
 app.put('/api/transactions/:id', transactionsId);
 app.delete('/api/transactions/:id', transactionsId);
@@ -139,6 +178,41 @@ app.put('/api/owner/venues/:id', ownerVenuesId);
 app.delete('/api/owner/venues/:id', ownerVenuesId);
 
 app.get('/api/fields/search', fieldsSearch);
+
+// Push Notifications
+import pushSubscribe from '../api/push/subscribe';
+import pushSend from '../api/push/send';
+app.post('/api/push/subscribe', pushSubscribe);
+app.post('/api/push/send', pushSend);
+
+// AI Team Balancing
+import aiBalance from '../api/ai/balance';
+app.post('/api/ai/balance', aiBalance);
+
+// Gamification
+import achievementsIndex from '../api/achievements/index';
+import achievementsAward from '../api/achievements/award';
+import leaderboard from '../api/achievements/leaderboard';
+app.get('/api/achievements', achievementsIndex);
+app.post('/api/achievements/award', achievementsAward);
+app.get('/api/achievements/leaderboard', leaderboard);
+
+// WhatsApp Integration
+import whatsappShare from '../api/whatsapp/share';
+import whatsappInvite from '../api/whatsapp/invite';
+app.post('/api/whatsapp/share', whatsappShare);
+app.get('/api/whatsapp/invite/:groupId', whatsappInvite);
+
+// Field Marketplace
+import marketplaceSearch from '../api/marketplace/search';
+import marketplaceBook from '../api/marketplace/book';
+import marketplaceReviews from '../api/marketplace/reviews';
+import marketplaceAvailability from '../api/marketplace/availability';
+app.get('/api/marketplace/search', marketplaceSearch);
+app.get('/api/marketplace/availability', marketplaceAvailability);
+app.post('/api/marketplace/book', marketplaceBook);
+app.get('/api/marketplace/reviews/:fieldId', marketplaceReviews);
+app.post('/api/marketplace/reviews/:fieldId', marketplaceReviews);
 
 const frontendDist = path.resolve(process.cwd(), '../client/dist');
 const indexHtml = path.join(frontendDist, 'index.html');

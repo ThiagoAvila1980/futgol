@@ -10,39 +10,57 @@ import { OwnerDashboard } from './components/OwnerDashboard';
 import { ProfileScreen } from './components/ProfileScreen';
 import { FinancialScreen } from './components/FinancialScreen';
 import { StatsScreen } from './components/StatsScreen';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { GamificationPanel } from './components/GamificationPanel';
+import { WhatsAppShare } from './components/WhatsAppShare';
 import { storage } from './services/storage';
 import { authService } from './services/auth';
+import { pushService } from './services/push';
 import { Button } from './components/ui/Button';
 import { Card } from './components/ui/Card';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
+import { Badge } from './components/ui/Badge';
+import { Avatar, AvatarImage, AvatarFallback } from './components/ui/Avatar';
+import { Separator } from './components/ui/Separator';
 import { Preloader } from './components/Preloader';
+import { cn } from './lib/utils';
 
-// Função utilitária para combinar classes do Tailwind de forma inteligente
-function cn(...inputs: (string | undefined | null | false)[]) {
-  return twMerge(clsx(inputs));
-}
+import {
+  LayoutGrid,
+  Clock,
+  BarChart3,
+  Users,
+  MapPin,
+  DollarSign,
+  Building2,
+  ChevronDown,
+  User as UserIcon,
+  UsersRound,
+  LogOut,
+  Trophy,
+  TrendingUp,
+  CalendarDays,
+  Lightbulb,
+  ArrowRightLeft,
+  BadgeCheck,
+  ShoppingBag,
+  Medal,
+} from 'lucide-react';
 
 const VIEW_KEY = 'futgol_last_view';
 const ACTIVE_GROUP_KEY = 'futgol_active_group_id';
 
 const App: React.FC = () => {
-  // Estado de Autenticação
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  // Estado dos Menus de Usuário (Desktop e Mobile)
   const [showUserMenu, setShowUserMenu] = useState(false);
   const desktopUserMenuRef = useRef<HTMLDivElement>(null);
   const mobileUserMenuRef = useRef<HTMLDivElement>(null);
 
-  // Estado Global do Aplicativo e Multi-grupo (Tenancy)
   const [activeGroup, setActiveGroup] = useState<Group | null>(null);
   const [currentView, setCurrentView] = useState<ViewState>(() => {
     try {
-      // Recupera a última visualização do usuário para manter o contexto ao recarregar
       const v = localStorage.getItem(VIEW_KEY) as ViewState | null;
       return (v as ViewState) || 'groups';
     } catch {
@@ -51,20 +69,17 @@ const App: React.FC = () => {
   });
   const [isDataLoading, setIsDataLoading] = useState(false);
 
-  // Estado dos Dados (Filtrados pelo grupo ativo)
   const [players, setPlayers] = useState<Player[]>([]);
   const [fields, setFields] = useState<Field[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [notifications, setNotifications] = useState<string[]>([]);
   const prevConfirmCountsRef = useRef<Record<string, number>>({});
 
-  // Verificação de permissão de Administrador (Dono do grupo ou presente na lista de admins)
   const isAdmin = !!(activeGroup && currentUser && (
     activeGroup.adminId === currentUser.id ||
     (Array.isArray(activeGroup.admins) && activeGroup.admins.includes(currentUser.id))
   ));
 
-  // Fecha o menu do usuário ao clicar fora dele
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const clickedOutsideDesktop = desktopUserMenuRef.current && !desktopUserMenuRef.current.contains(event.target as Node);
@@ -77,13 +92,14 @@ const App: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showUserMenu]);
 
-  // Valida a sessão ao iniciar o app
   useEffect(() => {
     const checkSession = async () => {
       try {
         const user = await authService.validateSession();
         setCurrentUser(user);
-        // seedDatabase removido do fluxo principal para ganho de performance
+        if (user && pushService.isSupported()) {
+          pushService.subscribe(user.id).catch(() => {});
+        }
       } catch (err) {
         console.error("Falha na validação da sessão", err);
       } finally {
@@ -93,7 +109,6 @@ const App: React.FC = () => {
     checkSession();
   }, []);
 
-  // Persiste a visualização atual e o grupo ativo no localStorage
   useEffect(() => {
     try {
       localStorage.setItem(VIEW_KEY, currentView);
@@ -108,25 +123,15 @@ const App: React.FC = () => {
     }
   }, [activeGroup]);
 
-
-  // Carrega os grupos do usuário após o login e seleciona o último usado ou o primeiro da lista
   useEffect(() => {
     if (currentUser && !activeGroup) {
       const initGroups = async () => {
         try {
           const userGroups = await storage.groups.getByUser(currentUser.id);
-
-          // Lógica de seleção automática de grupo alterada:
-          // 1. Tenta recuperar o último grupo acessado (localStorage).
-          // 2. Se houver apenas 1 grupo, abre ele direto (mesmo sem histórico).
-          // 3. Caso contrário, manda para a tela de Seleção de Grupos.
-
           const lastSavedId = (() => {
             try { return localStorage.getItem(ACTIVE_GROUP_KEY) || ''; } catch { return ''; }
           })();
           const lastSavedGroup = userGroups.find(g => g.id === lastSavedId);
-
-          // Se existe histórico válido OU apenas 1 grupo disponível
           const chosen = lastSavedGroup || (userGroups.length === 1 ? userGroups[0] : null);
 
           if (chosen) {
@@ -139,7 +144,6 @@ const App: React.FC = () => {
             })();
             setCurrentView(savedView || 'dashboard');
           } else {
-            // Múltiplos grupos e sem histórico (ou nenhum grupo)
             if (currentUser.role === 'field_owner') {
               setCurrentView('owner_dashboard');
             } else {
@@ -157,7 +161,6 @@ const App: React.FC = () => {
     }
   }, [currentUser, activeGroup]);
 
-  // Carrega os dados (jogadores, campos, jogos) específicos do grupo ativo
   useEffect(() => {
     if (currentUser && activeGroup) {
       fetchGroupData();
@@ -169,7 +172,7 @@ const App: React.FC = () => {
   }, [currentUser, activeGroup]);
 
   const fetchGroupData = async (silent = false) => {
-    if (!activeGroup || !currentUser) return null;
+    if (!activeGroup || !currentUser) return;
     if (!silent) setIsDataLoading(true);
     try {
       const [loadedPlayers, loadedFields, loadedMatches, userGroups] = await Promise.all([
@@ -179,7 +182,6 @@ const App: React.FC = () => {
         storage.groups.getByUser(currentUser.id)
       ]);
 
-      // Check if group details changed before updating activeGroup
       const updatedActive = userGroups.find(g => g.id === activeGroup.id);
       if (updatedActive) {
         const hasAdminsChanged = JSON.stringify(updatedActive.admins) !== JSON.stringify(activeGroup.admins);
@@ -197,7 +199,6 @@ const App: React.FC = () => {
       setFields(loadedFields);
       setMatches(loadedMatches);
 
-      // Process vacancies notifications
       const capacityForSport = (sport?: string) => {
         if (sport === 'Futebol de Campo') return 22;
         return 14;
@@ -216,18 +217,13 @@ const App: React.FC = () => {
         }
         prev[m.id] = count;
       });
-
-      return { players: loadedPlayers, fields: loadedFields, matches: loadedMatches };
     } catch (error) {
       console.error("Erro ao carregar dados do grupo:", error);
-      return null;
     } finally {
       setIsDataLoading(false);
     }
   };
 
-
-  // Handlers para persistência e remoção de dados
   const handlePersistPlayer = async (player: Player) => {
     if (!activeGroup) return;
     const playerWithGroup = { ...player, groupId: activeGroup.id };
@@ -246,10 +242,6 @@ const App: React.FC = () => {
   const handleDeletePlayer = async (id: string) => {
     if (!activeGroup) return;
     const playerToRemove = players.find(p => p.id === id);
-
-    // Removida chamada para storage.players.delete(id) pois ela tentava deletar o usuário global
-    // e o endpoint API não suportava DELETE, causando erro 405.
-    // Apenas removemos a associação com o grupo abaixo.
 
     if (playerToRemove) {
       const targetId = playerToRemove.userId || playerToRemove.id;
@@ -301,9 +293,8 @@ const App: React.FC = () => {
   };
 
   const handleDeleteMatch = async (id: string) => {
-    const updated = await storage.matches.cancel(id);
+    await storage.matches.cancel(id);
     setMatches(prev => prev.map(m => m.id === id ? { ...m, isCanceled: true } : m));
-    return updated;
   };
 
   const handleLogout = async () => {
@@ -313,9 +304,6 @@ const App: React.FC = () => {
       console.error("Error logging out", e);
     }
 
-    // Clear all states
-    // localStorage.removeItem(ACTIVE_GROUP_KEY); // Mantido para o usuário entrar no último grupo ao logar novamente
-    // localStorage.removeItem(VIEW_KEY);
     setShowLogoutModal(false);
     setShowUserMenu(false);
     setPlayers([]);
@@ -348,7 +336,6 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Statistics Helpers for Dashboard ---
   const getTopScorer = () => {
     if (players.length === 0 || matches.length === 0) return null;
     const mvpCounts: Record<string, number> = {};
@@ -395,7 +382,7 @@ const App: React.FC = () => {
           <Button variant="outline" onClick={() => setCurrentView('groups')}>Ir para Meus Grupos</Button>
           {currentUser && currentUser.role === 'field_owner' && (
             <Button variant="ghost" onClick={() => setCurrentView('owner_dashboard')} className="mt-4 text-brand-600 font-bold border border-brand-100 bg-brand-50 hover:bg-brand-100">
-              🏢 Painel do Dono
+              <Building2 className="h-4 w-4 mr-1" /> Painel do Dono
             </Button>
           )}
         </div>
@@ -458,27 +445,37 @@ const App: React.FC = () => {
             activeGroup={activeGroup!}
           />
         );
+      case 'gamification':
+        return (
+          <ErrorBoundary>
+            <GamificationPanel
+              groupId={activeGroup!.id}
+              playerId={currentUser?.id}
+              players={players}
+              matches={matches}
+              activeGroup={activeGroup!}
+            />
+          </ErrorBoundary>
+        );
       case 'dashboard':
       default:
         return (
           <div className="space-y-6 animate-fade-in">
-            {/* Active Group Premium Banner */}
+            {/* Active Group Banner */}
             <div className="relative overflow-hidden rounded-3xl bg-navy-900 text-white shadow-2xl border border-navy-800 group">
-              {/* Dynamic Background */}
               {activeGroup?.logo ? (
                 <div className="absolute inset-0 z-0">
                   <img src={activeGroup.logo} className="w-full h-full object-cover scale-110 blur-2xl opacity-30 transform group-hover:scale-125 transition-transform duration-1000" alt="" />
-                  <div className="absolute inset-0 bg-gradient-to-r from-navy-950 via-navy-950/80 to-transparent"></div>
+                  <div className="absolute inset-0 bg-gradient-to-r from-navy-950 via-navy-950/80 to-transparent" />
                 </div>
               ) : (
                 <div className="absolute inset-0 z-0">
-                  <div className="absolute inset-0 bg-gradient-to-br from-brand-900/40 to-navy-950"></div>
-                  <div className="absolute -right-20 -top-20 w-80 h-80 bg-brand-500/10 rounded-full blur-3xl"></div>
+                  <div className="absolute inset-0 bg-gradient-to-br from-brand-900/40 to-navy-950" />
+                  <div className="absolute -right-20 -top-20 w-80 h-80 bg-brand-500/10 rounded-full blur-3xl" />
                 </div>
               )}
 
               <div className="relative z-10 flex flex-col md:flex-row items-center md:items-stretch gap-6 p-6 md:p-8">
-                {/* Logo Section */}
                 <div className="relative shrink-0">
                   <div className="w-24 h-24 md:w-28 md:h-28 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl transform transition-transform group-hover:scale-105 duration-500">
                     {activeGroup?.logo ? (
@@ -488,37 +485,35 @@ const App: React.FC = () => {
                     )}
                   </div>
                   <div className="absolute -bottom-2 -right-2 bg-brand-500 text-white p-1.5 rounded-lg shadow-lg">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" /></svg>
+                    <BadgeCheck className="h-4 w-4" />
                   </div>
                 </div>
 
-                {/* Content Section */}
                 <div className="flex-1 flex flex-col justify-center text-center md:text-left min-w-0">
                   <div className="flex flex-wrap justify-center md:justify-start items-center gap-2 mb-2">
-                    <span className="bg-brand-500/20 text-brand-300 text-[10px] font-black uppercase tracking-[0.2em] px-2.5 py-1 rounded-full border border-brand-500/30">
+                    <Badge variant="brand" className="text-[10px] font-black uppercase tracking-[0.2em]">
                       Grupo Ativo
-                    </span>
-                    <span className="bg-white/10 text-white/70 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border border-white/5">
+                    </Badge>
+                    <Badge variant="secondary" className="text-[10px] font-bold uppercase tracking-widest bg-white/10 text-white/70 border-white/5">
                       {activeGroup?.sport}
-                    </span>
+                    </Badge>
                   </div>
                   <h3 className="text-3xl md:text-4xl font-heading font-black text-white truncate mb-1 leading-tight">
                     {activeGroup?.name}
                   </h3>
                   {activeGroup?.city && (
                     <div className="flex items-center justify-center md:justify-start gap-1.5 text-navy-200 text-sm font-medium">
-                      <svg className="w-4 h-4 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                      <MapPin className="h-4 w-4 text-brand-400" />
                       {activeGroup.city}
                     </div>
                   )}
                 </div>
 
-                {/* Actions Section */}
                 <div className="flex flex-col flex-wrap justify-center gap-3">
                   <div className="flex gap-2">
                     {notifications.length > 0 && (
                       <button onClick={() => setCurrentView('matches')} className="flex items-center gap-2 text-white text-xs font-bold bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl border border-white/20 hover:bg-white/20 transition-all">
-                        <span className="w-2 h-2 rounded-full bg-brand-400 animate-pulse"></span>
+                        <span className="w-2 h-2 rounded-full bg-brand-400 animate-pulse" />
                         {notifications[0]}
                       </button>
                     )}
@@ -527,9 +522,13 @@ const App: React.FC = () => {
                       size="sm"
                       onClick={() => setCurrentView('groups')}
                       className="bg-navy-800/50 border-white/10 text-white hover:bg-navy-800 hover:border-white/30 rounded-xl px-5"
+                      leftIcon={<ArrowRightLeft className="h-3.5 w-3.5" />}
                     >
                       Trocar Grupo
                     </Button>
+                    {activeGroup && (
+                      <WhatsAppShare group={activeGroup} type="invite" />
+                    )}
                   </div>
                 </div>
               </div>
@@ -551,22 +550,20 @@ const App: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                {/* Decorative Pattern */}
-                <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-3xl group-hover:bg-white/20 transition-all"></div>
+                <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-3xl group-hover:bg-white/20 transition-all" />
                 <div className="absolute top-4 right-4 opacity-20 transform rotate-12">
-                  <svg className="w-12 h-12" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" /></svg>
+                  <CalendarDays className="h-12 w-12" />
                 </div>
               </div>
 
-              {/* MVP Card */}
+              {/* MVP / Stats Card */}
               {topPlayer ? (
                 <div className="bg-gradient-to-br from-accent-400 to-accent-600 p-6 rounded-2xl text-white shadow-lg relative overflow-hidden">
                   <div className="relative z-10">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-accent-50 flex items-center gap-2 mb-4">
-                      <span className="bg-white/20 p-1 rounded">🏆</span>
+                      <span className="bg-white/20 p-1 rounded"><Trophy className="h-4 w-4" /></span>
                       Estatísticas dos jogadores
                     </h3>
-
                     <div onClick={() => setCurrentView('stats')} className="flex items-center gap-4 cursor-pointer">
                       <div className={cn(
                         "w-16 h-16 rounded-full flex items-center justify-center text-white border-2 border-white/40 font-black text-2xl shadow-lg",
@@ -586,7 +583,7 @@ const App: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.2),transparent_70%)]"></div>
+                  <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.2),transparent_70%)]" />
                 </div>
               ) : (
                 <div
@@ -598,7 +595,7 @@ const App: React.FC = () => {
                     <p className="mt-2 text-navy-500 text-sm leading-relaxed">Acompanhe gols, assistências e frequência da galera.</p>
                   </div>
                   <div className="flex justify-end mt-4">
-                    <span className="text-5xl opacity-50 ">📊</span>
+                    <TrendingUp className="h-12 w-12 text-navy-300 opacity-50" />
                   </div>
                 </div>
               )}
@@ -612,20 +609,20 @@ const App: React.FC = () => {
                   <div>
                     <div className="flex justify-between items-start mb-2">
                       <h3 className="text-xl font-heading font-bold text-navy-900">Financeiro</h3>
-                      <span className="text-[10px] font-bold bg-navy-100 text-navy-600 px-2 py-1 rounded">ADMIN</span>
+                      <Badge variant="secondary" className="text-[10px] font-bold">ADMIN</Badge>
                     </div>
                     <p className="text-navy-500 text-sm">Gerencie o caixa, mensalidades e pagamentos de forma simples.</p>
                   </div>
                   <div className="mt-4 flex items-center justify-between">
                     <span className="text-navy-300 text-xs">Visão geral do caixa</span>
-                    <span className="text-4xl opacity-50">💰</span>
+                    <DollarSign className="h-10 w-10 text-navy-300 opacity-50" />
                   </div>
                 </div>
               )}
             </div>
 
             <div className="bg-brand-50 rounded-xl p-4 border border-brand-100 flex items-start gap-3">
-              <span className="text-2xl">💡</span>
+              <Lightbulb className="h-6 w-6 text-brand-600 shrink-0 mt-0.5" />
               <div>
                 <h4 className="font-bold text-brand-900 text-sm">Dica Profissional</h4>
                 <p className="text-brand-800 text-sm mt-1 leading-relaxed">
@@ -639,7 +636,6 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Auth & Loading States ---
   if (isAuthLoading) {
     return <Preloader fullScreen text="Carregando Futgol..." />;
   }
@@ -648,9 +644,23 @@ const App: React.FC = () => {
     return <LandingScreen onLoginSuccess={setCurrentUser} />;
   }
 
+  const viewTitles: Record<string, { title: string; subtitle: string }> = {
+    dashboard: { title: 'Início', subtitle: `E ae ${currentUser.name.split(' ')[0]}! Tudo pronto para o jogo?` },
+    players: { title: 'Jogadores', subtitle: 'Gestão profissional do grupo.' },
+    groups: { title: 'Meus Grupos', subtitle: 'Gerencie seus times' },
+    profile: { title: 'Minha Conta', subtitle: 'Atualize seus dados pessoais' },
+    stats: { title: 'Estatísticas', subtitle: 'Gestão profissional do grupo.' },
+    financial: { title: 'Financeiro', subtitle: 'Controle financeiro transparente' },
+    fields: { title: 'Locais', subtitle: 'Gestão profissional do grupo.' },
+    owner_dashboard: { title: 'Painel do Dono', subtitle: 'Gerencie suas quadras e agendamentos' },
+    gamification: { title: 'Ranking & Conquistas', subtitle: 'Acompanhe seu progresso e conquistas' },
+  };
+
+  const currentViewMeta = viewTitles[currentView] || { title: '', subtitle: '' };
+
   return (
     <div className="h-screen bg-navy-50 flex flex-col md:flex-row overflow-hidden font-sans">
-      {/* Sidebar - Premium Dark Theme */}
+      {/* Sidebar */}
       <nav className="flex-none bg-navy-950 text-white flex flex-col z-30 shadow-xl md:w-72">
         <div className="p-6 flex items-center justify-between gap-3 border-b border-navy-800">
           <div className="flex items-center gap-3 cursor-pointer group" onClick={() => activeGroup && setCurrentView('dashboard')}>
@@ -660,7 +670,7 @@ const App: React.FC = () => {
                 alt="Futgol"
                 className="w-10 h-10 rounded-xl bg-white/10 p-1 border border-white/10 group-hover:scale-105 transition-transform"
               />
-              <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-brand-500 rounded-full border-2 border-navy-950"></div>
+              <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-brand-500 rounded-full border-2 border-navy-950" />
             </div>
             <div>
               <h1 className="text-xl font-heading font-bold tracking-tight">Futgol</h1>
@@ -669,15 +679,14 @@ const App: React.FC = () => {
 
             {activeGroup && (
               <div className="md:hidden ml-auto">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-brand-500/10 rounded-full border border-brand-500/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></span>
-                  <span className="text-[10px] font-bold text-brand-400 tracking-wider">ATIVO</span>
-                </div>
+                <Badge variant="brand" className="text-[10px] font-bold tracking-wider gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
+                  ATIVO
+                </Badge>
               </div>
             )}
           </div>
 
-          {/* Active Group Logo */}
           {activeGroup?.logo && (
             <div className="flex items-center justify-center animate-fade-in">
               <img
@@ -691,11 +700,10 @@ const App: React.FC = () => {
           {/* Mobile Profile Icon */}
           <div className="md:hidden relative ml-auto" ref={mobileUserMenuRef}>
             <button onClick={() => setShowUserMenu(!showUserMenu)} className="focus:outline-none">
-              <img
-                src={currentUser.avatar || `https://ui-avatars.com/api/?name=${currentUser.name}`}
-                className="w-9 h-9 rounded-full border-2 border-navy-700"
-                alt="Avatar"
-              />
+              <Avatar className="h-9 w-9 border-2 border-navy-700">
+                <AvatarImage src={currentUser.avatar || `https://ui-avatars.com/api/?name=${currentUser.name}`} alt={currentUser.name} />
+                <AvatarFallback>{currentUser.name.charAt(0)}</AvatarFallback>
+              </Avatar>
             </button>
 
             {showUserMenu && (
@@ -704,49 +712,37 @@ const App: React.FC = () => {
                   <p className="text-sm font-bold truncate">{currentUser.name}</p>
                   <p className="text-xs text-navy-500 truncate">{currentUser.email}</p>
                 </div>
-                <button
-                  onClick={() => { setCurrentView('profile'); setShowUserMenu(false); }}
-                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-navy-50 flex items-center gap-2"
-                >
-                  👤 Minha Conta
+                <button onClick={() => { setCurrentView('profile'); setShowUserMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm hover:bg-navy-50 flex items-center gap-2">
+                  <UserIcon className="h-4 w-4 text-navy-400" /> Minha Conta
                 </button>
-                <button
-                  onClick={() => { setCurrentView('groups'); setShowUserMenu(false); }}
-                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-navy-50 flex items-center gap-2"
-                >
-                  👥 Meus Grupos
+                <button onClick={() => { setCurrentView('groups'); setShowUserMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm hover:bg-navy-50 flex items-center gap-2">
+                  <UsersRound className="h-4 w-4 text-navy-400" /> Meus Grupos
                 </button>
                 {currentUser.role === 'field_owner' && (
-                  <button
-                    onClick={() => { setCurrentView('owner_dashboard'); setShowUserMenu(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-navy-50 flex items-center gap-2"
-                  >
-                    🏢 Painel do Dono
+                  <button onClick={() => { setCurrentView('owner_dashboard'); setShowUserMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm hover:bg-navy-50 flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-navy-400" /> Painel do Dono
                   </button>
                 )}
-                <div className="border-t border-navy-50 my-1"></div>
-                <button
-                  onClick={() => { setShowLogoutModal(true); setShowUserMenu(false); }}
-                  className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                >
-                  SAIR
+                <Separator className="my-1" />
+                <button onClick={() => { setShowLogoutModal(true); setShowUserMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+                  <LogOut className="h-4 w-4" /> SAIR
                 </button>
               </div>
             )}
           </div>
         </div>
 
-        {/* Mobile Sidebar Navigation */}
+        {/* Desktop Sidebar Navigation */}
         {(activeGroup || currentUser.role === 'field_owner') && (
           <div className="hidden md:flex md:flex-col p-4 gap-2 md:flex-1 overflow-y-auto">
-            
+
             {currentUser.role === 'field_owner' && (
               <>
-                 <div className="text-xs font-bold text-navy-500 uppercase tracking-wider px-4 mb-2 mt-2">Área do Dono</div>
-                 <NavButton
+                <div className="text-xs font-bold text-navy-500 uppercase tracking-wider px-4 mb-2 mt-2">Área do Dono</div>
+                <NavButton
                   active={currentView === 'owner_dashboard'}
                   onClick={() => setCurrentView('owner_dashboard')}
-                  icon={<span className="text-lg">🏢</span>}
+                  icon={<Building2 className="h-5 w-5" />}
                   label="Painel do Dono"
                 />
               </>
@@ -755,47 +751,16 @@ const App: React.FC = () => {
             {activeGroup && (
               <>
                 <div className="text-xs font-bold text-navy-500 uppercase tracking-wider px-4 mb-2 mt-4">Menu Principal</div>
-
-                <NavButton
-                  active={currentView === 'dashboard'}
-                  onClick={() => setCurrentView('dashboard')}
-                  icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>}
-                  label="Início"
-                />
-                <NavButton
-                  active={currentView === 'matches'}
-                  onClick={() => setCurrentView('matches')}
-                  icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-                  label="Jogos"
-                />
-                <NavButton
-                  active={currentView === 'stats'}
-                  onClick={() => setCurrentView('stats')}
-                  icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>}
-                  label="Estatísticas"
-                />
-                <NavButton
-                  active={currentView === 'players'}
-                  onClick={() => setCurrentView('players')}
-                  icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
-                  label="Membros"
-                />
-                <NavButton
-                  active={currentView === 'fields'}
-                  onClick={() => setCurrentView('fields')}
-                  icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
-                  label="Campos"
-                />
+                <NavButton active={currentView === 'dashboard'} onClick={() => setCurrentView('dashboard')} icon={<LayoutGrid className="h-5 w-5" />} label="Início" />
+                <NavButton active={currentView === 'matches'} onClick={() => setCurrentView('matches')} icon={<Clock className="h-5 w-5" />} label="Jogos" />
+                <NavButton active={currentView === 'players'} onClick={() => setCurrentView('players')} icon={<Users className="h-5 w-5" />} label="Membros" />
+                <NavButton active={currentView === 'fields'} onClick={() => setCurrentView('fields')} icon={<MapPin className="h-5 w-5" />} label="Campos" />
+                <NavButton active={currentView === 'gamification'} onClick={() => setCurrentView('gamification')} icon={<Medal className="h-5 w-5" />} label="Ranking" />
 
                 {isAdmin && (
                   <>
                     <div className="text-xs font-bold text-navy-500 uppercase tracking-wider px-4 mb-2 mt-6">Administração</div>
-                    <NavButton
-                      active={currentView === 'financial'}
-                      onClick={() => setCurrentView('financial')}
-                      icon={<span className="text-lg">💰</span>}
-                      label="Financeiro"
-                    />
+                    <NavButton active={currentView === 'financial'} onClick={() => setCurrentView('financial')} icon={<DollarSign className="h-5 w-5" />} label="Financeiro" />
                   </>
                 )}
               </>
@@ -806,63 +771,59 @@ const App: React.FC = () => {
         {/* User Footer (Desktop) */}
         <div className="mt-auto border-t border-navy-800 p-4 hidden md:block">
           <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-navy-900 cursor-pointer transition-colors" onClick={() => setShowUserMenu(!showUserMenu)} ref={desktopUserMenuRef}>
-            <img
-              src={currentUser.avatar || `https://ui-avatars.com/api/?name=${currentUser.name}`}
-              className="w-10 h-10 rounded-full border border-navy-600"
-              alt="Avatar"
-            />
+            <Avatar className="h-10 w-10 border border-navy-600">
+              <AvatarImage src={currentUser.avatar || `https://ui-avatars.com/api/?name=${currentUser.name}`} alt={currentUser.name} />
+              <AvatarFallback>{currentUser.name.charAt(0)}</AvatarFallback>
+            </Avatar>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-white truncate">{currentUser.name}</p>
               <p className="text-[10px] text-navy-400 font-medium truncate">
                 {activeGroup && activeGroup.adminId === currentUser.id ? 'ADMINISTRADOR' : 'MEMBRO'}
               </p>
             </div>
+            <ChevronDown className="h-4 w-4 text-navy-400" />
             {showUserMenu && (
               <div className="absolute bottom-20 left-4 w-60 bg-white rounded-xl shadow-2xl border border-navy-100 py-2 z-50 text-navy-900 animate-in slide-in-from-bottom-2 fade-in duration-200">
-                {/* Same Dropdown as Mobile but positioned differently */}
-                <button onClick={() => setCurrentView('profile')} className="w-full text-left px-4 py-3 text-sm hover:bg-navy-50 flex items-center gap-3">👤 Minha Conta</button>
-                <button onClick={() => setCurrentView('groups')} className="w-full text-left px-4 py-3 text-sm hover:bg-navy-50 flex items-center gap-3">👥 Meus Grupos</button>
+                <button onClick={() => setCurrentView('profile')} className="w-full text-left px-4 py-3 text-sm hover:bg-navy-50 flex items-center gap-3">
+                  <UserIcon className="h-4 w-4 text-navy-400" /> Minha Conta
+                </button>
+                <button onClick={() => setCurrentView('groups')} className="w-full text-left px-4 py-3 text-sm hover:bg-navy-50 flex items-center gap-3">
+                  <UsersRound className="h-4 w-4 text-navy-400" /> Meus Grupos
+                </button>
                 {currentUser.role === 'field_owner' && (
-                  <button onClick={() => setCurrentView('owner_dashboard')} className="w-full text-left px-4 py-3 text-sm hover:bg-navy-50 flex items-center gap-3">🏢 Painel do Dono</button>
+                  <button onClick={() => setCurrentView('owner_dashboard')} className="w-full text-left px-4 py-3 text-sm hover:bg-navy-50 flex items-center gap-3">
+                    <Building2 className="h-4 w-4 text-navy-400" /> Painel do Dono
+                  </button>
                 )}
-                <div className="border-t border-navy-50 my-1"></div>
-                <button onClick={() => setShowLogoutModal(true)} className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3">🚪 Sair da conta</button>
+                <Separator className="my-1" />
+                <button onClick={() => setShowLogoutModal(true)} className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3">
+                  <LogOut className="h-4 w-4" /> Sair da conta
+                </button>
               </div>
             )}
           </div>
         </div>
       </nav>
 
-      {/* Main Content Area */}
+      {/* Main Content */}
       <main className={`flex-1 p-4 md:p-8 overflow-y-auto bg-navy-50 relative ${(activeGroup || currentUser?.role === 'field_owner') ? 'pb-24 md:pb-8' : ''}`}>
         {isDataLoading && <Preloader overlay text="Sincronizando..." />}
         {currentView !== 'matches' && (
           <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h2 className="text-3xl font-heading font-bold text-navy-900 capitalize tracking-tight">
-                {currentView === 'dashboard' ? 'Início' :
-                  currentView === 'players' ? 'Jogadores' :
-                    currentView === 'groups' ? 'Meus Grupos' :
-                      currentView === 'profile' ? 'Minha Conta' :
-                        currentView === 'stats' ? 'Estatísticas' :
-                          currentView === 'financial' ? 'Financeiro' :
-                            currentView === 'owner_dashboard' ? 'Painel do Dono' : 'Locais'}
+                {currentViewMeta.title}
               </h2>
               <p className="text-navy-500 text-sm mt-1 font-medium">
-                {currentView === 'dashboard' ? `E ae  ${currentUser.name.split(' ')[0]}! Tudo pronto para o jogo?` :
-                  currentView === 'groups' ? 'Gerencie seus times' :
-                    currentView === 'profile' ? 'Atualize seus dados pessoais' :
-                      currentView === 'financial' ? 'Controle financeiro transparente' :
-                        currentView === 'owner_dashboard' ? 'Gerencie suas quadras e agendamentos' : 'Gestão profissional do grupo.'}
+                {currentViewMeta.subtitle}
               </p>
             </div>
           </header>
         )}
-
-        {renderContent()}
+        <ErrorBoundary>{renderContent()}</ErrorBoundary>
       </main>
 
-      {/* Logout Confirmation Modal */}
+      {/* Logout Modal */}
       {showLogoutModal && (
         <div className="fixed inset-0 bg-navy-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <Card className="w-full max-w-sm animate-in fade-in zoom-in duration-200">
@@ -871,19 +832,11 @@ const App: React.FC = () => {
               Você precisará fazer login novamente para acessar seus dados.
             </p>
             <div className="flex gap-3">
-              <Button
-                variant="ghost"
-                onClick={() => setShowLogoutModal(false)}
-                className="flex-1"
-              >
+              <Button variant="ghost" onClick={() => setShowLogoutModal(false)} className="flex-1">
                 Cancelar
               </Button>
-              <Button
-                variant="danger"
-                onClick={handleLogout}
-                className="flex-1"
-              >
-                Sair
+              <Button variant="danger" onClick={handleLogout} className="flex-1">
+                <LogOut className="h-4 w-4" /> Sair
               </Button>
             </div>
           </Card>
@@ -894,47 +847,17 @@ const App: React.FC = () => {
       {(activeGroup || currentUser.role === 'field_owner') && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-navy-950/95 backdrop-blur-xl border-t border-navy-800 px-2 py-3 pb-6 z-40 flex items-center justify-around shadow-[0_-10px_25px_rgba(0,0,0,0.3)]">
           {currentUser.role === 'field_owner' && (
-             <TabButton
-              active={currentView === 'owner_dashboard'}
-              onClick={() => setCurrentView('owner_dashboard')}
-              icon={<span className="text-xl">🏢</span>}
-              label="Dono"
-            />
+            <TabButton active={currentView === 'owner_dashboard'} onClick={() => setCurrentView('owner_dashboard')} icon={<Building2 className="h-5 w-5" />} label="Dono" />
           )}
-          
+
           {activeGroup && (
             <>
-              <TabButton
-                active={currentView === 'dashboard'}
-                onClick={() => setCurrentView('dashboard')}
-                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>}
-                label="Início"
-              />
-              <TabButton
-                active={currentView === 'matches'}
-                onClick={() => setCurrentView('matches')}
-                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-                label="Jogos"
-              />
-              <TabButton
-                active={currentView === 'players'}
-                onClick={() => setCurrentView('players')}
-                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
-                label="Jogadores"
-              />
-              <TabButton
-                active={currentView === 'fields'}
-                onClick={() => setCurrentView('fields')}
-                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
-                label="Campos"
-              />
+              <TabButton active={currentView === 'dashboard'} onClick={() => setCurrentView('dashboard')} icon={<LayoutGrid className="h-5 w-5" />} label="Início" />
+              <TabButton active={currentView === 'matches'} onClick={() => setCurrentView('matches')} icon={<Clock className="h-5 w-5" />} label="Jogos" />
+              <TabButton active={currentView === 'players'} onClick={() => setCurrentView('players')} icon={<Users className="h-5 w-5" />} label="Jogadores" />
+              <TabButton active={currentView === 'fields'} onClick={() => setCurrentView('fields')} icon={<MapPin className="h-5 w-5" />} label="Campos" />
               {(isAdmin || activeGroup.adminId === currentUser.id) && (
-                <TabButton
-                  active={currentView === 'financial'}
-                  onClick={() => setCurrentView('financial')}
-                  icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-                  label="Financeiro"
-                />
+                <TabButton active={currentView === 'financial'} onClick={() => setCurrentView('financial')} icon={<DollarSign className="h-5 w-5" />} label="Financeiro" />
               )}
             </>
           )}
@@ -944,37 +867,34 @@ const App: React.FC = () => {
   );
 };
 
-// Mobile Tab Button
 const TabButton: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({ active, onClick, icon, label }) => (
   <button
     onClick={onClick}
-    className={`flex flex-col items-center justify-center gap-1 transition-all duration-200 flex-1
-      ${active ? 'text-white scale-110' : 'text-white/60'}
-    `}
+    className={cn(
+      "flex flex-col items-center justify-center gap-1 transition-all duration-200 flex-1",
+      active ? "text-white scale-110" : "text-white/60"
+    )}
   >
-    <div className={`p-1.5 rounded-lg transition-colors ${active ? 'bg-white/10' : ''}`}>
+    <div className={cn("p-1.5 rounded-lg transition-colors", active && "bg-white/10")}>
       {icon}
     </div>
-    <span className="text-[10px] font-bold uppercase tracking-wider">
-      {label}
-    </span>
+    <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
   </button>
 );
 
-// Styled Nav Button
 const NavButton: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({ active, onClick, icon, label }) => (
   <button
     onClick={onClick}
-    className={`flex items-center gap-3 px-4 py-3 rounded-xl w-full transition-all duration-200 whitespace-nowrap font-medium text-sm
-      ${active
-        ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20'
-        : 'text-navy-300 hover:bg-white/5 hover:text-white'
-      }
-    `}
+    className={cn(
+      "flex items-center gap-3 px-4 py-3 rounded-xl w-full transition-all duration-200 whitespace-nowrap font-medium text-sm",
+      active
+        ? "bg-brand-600 text-white shadow-lg shadow-brand-600/20"
+        : "text-navy-300 hover:bg-white/5 hover:text-white"
+    )}
   >
     {icon}
     <span>{label}</span>
-    {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>}
+    {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
   </button>
 );
 

@@ -70,6 +70,7 @@ export interface Group {
   fixedAmount?: number;
   monthlyFee?: number;
   city?: string;
+  matchLabel?: string;
 }
 
 export interface FieldSlot {
@@ -98,6 +99,8 @@ export interface Field {
   description?: string;
   photos?: string[];
   isActive?: boolean;
+  contactName?: string;
+  contactPhone?: string;
 }
 
 export interface Venue {
@@ -131,6 +134,13 @@ export interface SubMatch {
   assists?: Record<string, number>; // playerId -> count
 }
 
+export interface MatchPlayerPoints {
+  attended: boolean;
+  goals: number;
+  assists: number;
+  points: number;
+}
+
 export interface Match {
   id: string;
   groupId: string; // Links match to a specific group
@@ -148,6 +158,7 @@ export interface Match {
   mvpId?: string; // ID of the "Man of the Match"
   mvpVotes?: Record<string, string>; // voterId -> candidateId
   subMatches?: SubMatch[];
+  playerPoints?: Record<string, MatchPlayerPoints>; // playerId -> points snapshot for this match
   isCanceled?: boolean;
 }
 
@@ -177,4 +188,4 @@ export interface Transaction {
   paidPlayerIds?: string[]; // IDs of players who contributed to an aggregated transaction
 }
 
-export type ViewState = 'dashboard' | 'players' | 'fields' | 'matches' | 'groups' | 'profile' | 'financial' | 'stats' | 'owner_dashboard';
+export type ViewState = 'dashboard' | 'players' | 'fields' | 'matches' | 'groups' | 'profile' | 'financial' | 'stats' | 'owner_dashboard' | 'marketplace' | 'gamification';

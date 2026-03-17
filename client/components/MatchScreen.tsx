@@ -2,20 +2,31 @@
 import React, { useState, useEffect } from 'react';
 import DateInput from './DateInput';
 import { Player, Field, Match, User, Group, Position, Comment, SubMatch } from '../types';
-// import { balanceTeamsWithAI } from '../services/geminiService';
 import { storage } from '../services/storage';
 import { MatchVoteCard } from './MatchVoteCard';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-// Utility for classes
-function cn(...inputs: (string | undefined | null | false)[]) {
-  return twMerge(clsx(inputs));
-}
+import { Badge } from './ui/Badge';
+import { cn } from '@/lib/utils';
+import { MarketplaceScreen } from './MarketplaceScreen';
+import {
+  ArrowLeft,
+  RefreshCw,
+  ChevronDown,
+  Settings,
+  Clock,
+  Plus,
+  MoreVertical,
+  Pencil,
+  Ban,
+  Flag,
+  RotateCcw,
+  Trash2,
+  Eraser,
+  Minus,
+} from 'lucide-react';
 
 interface MatchScreenProps {
   players: Player[];
@@ -92,11 +103,27 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
   const [subMatchToReactivate, setSubMatchToReactivate] = useState<string | null>(null);
   const [teamToClear, setTeamToClear] = useState<{ subMatchId: string, team: 'A' | 'B' } | null>(null);
 
+  // Configurações da Arena
+  const [isArenaSettingsOpen, setIsArenaSettingsOpen] = useState(false);
+  const [teamFormationMode, setTeamFormationMode] = useState<'manual' | 'automatic'>(() => {
+    try {
+      const saved = localStorage.getItem(`FUTGOL_FORMATION_MODE_${activeGroupId}`);
+      return (saved as 'manual' | 'automatic') || 'manual';
+    } catch { return 'manual'; }
+  });
+  const [gameTimeMode, setGameTimeMode] = useState<'play2leave' | 'winnerstays'>(() => {
+    try {
+      const saved = localStorage.getItem(`FUTGOL_GAME_TIME_MODE_${activeGroupId}`);
+      return (saved as 'play2leave' | 'winnerstays') || 'winnerstays';
+    } catch { return 'winnerstays'; }
+  });
+
   // Confirmação de Exclusão e Busca de Convidados
   const [matchToDelete, setMatchToDelete] = useState<string | null>(null);
   const [isGuestPickerOpen, setIsGuestPickerOpen] = useState(false);
   const [guestSearch, setGuestSearch] = useState('');
   const [guestCandidates, setGuestCandidates] = useState<Player[]>([]);
+  const [isMarketplaceOpen, setIsMarketplaceOpen] = useState(false);
 
   // Gestão Financeira de Mensalistas
   const [monthlyTxMap, setMonthlyTxMap] = useState<Record<string, string>>({});
@@ -191,6 +218,14 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
   useEffect(() => {
     localStorage.setItem(`FUTGOL_OUTFIELD_${activeGroupId}`, outfieldPlayers.toString());
   }, [outfieldPlayers, activeGroupId]);
+
+  useEffect(() => {
+    localStorage.setItem(`FUTGOL_FORMATION_MODE_${activeGroupId}`, teamFormationMode);
+  }, [teamFormationMode, activeGroupId]);
+
+  useEffect(() => {
+    localStorage.setItem(`FUTGOL_GAME_TIME_MODE_${activeGroupId}`, gameTimeMode);
+  }, [gameTimeMode, activeGroupId]);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -371,6 +406,43 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
     setEditingMatchId(null);
     setIsModalOpen(true);
   }
+
+  const handleBookAndCreateMatch = async (params: { fieldId: string; date: string; startTime: string; endTime: string }) => {
+    try {
+      if (!isAdmin || isSaving) return;
+      const id = genSafeId('match');
+      const matchToSave: Match = {
+        id,
+        groupId: activeGroupId,
+        date: params.date,
+        time: params.startTime,
+        fieldId: params.fieldId,
+        confirmedPlayerIds: [],
+        teamA: [],
+        teamB: [],
+        scoreA: 0,
+        scoreB: 0,
+        finished: false,
+      };
+      setIsSaving(true);
+      await onSave(matchToSave);
+      const allMatches = await storage.matches.getAll(activeGroupId);
+      const created = allMatches.find(m =>
+        m.fieldId === params.fieldId &&
+        m.date === params.date &&
+        m.time === params.startTime
+      ) || matchToSave;
+      setSelectedMatch(created);
+      setView('details');
+      alert('Quadra reservada e confronto criado com sucesso!');
+    } catch (err) {
+      console.error('Erro ao criar partida após reserva de quadra:', err);
+      alert('Reserva feita, mas houve erro ao criar o confronto. Confira os jogos na lista.');
+    } finally {
+      setIsSaving(false);
+      setIsMarketplaceOpen(false);
+    }
+  };
 
   const handleEditMatch = (match: Match) => {
     if (!isAdmin) return;
@@ -571,8 +643,21 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
       let tB: Player[] = [];
 
       if (subMatches.length === 0) {
-        tA = [];
-        tB = [];
+        if (teamFormationMode === 'automatic') {
+          const firstN = arrivedOutfielderIds.slice(0, totalNeeded);
+          if (firstN.length < totalNeeded) {
+            alert(`Para formação automática ${outfieldPlayers}x${outfieldPlayers}, são necessários pelo menos ${totalNeeded} jogadores de linha presentes.`);
+            setIsBalancing(false);
+            setIsSaving(false);
+            return;
+          }
+          const shuffled = [...firstN].sort(() => Math.random() - 0.5);
+          tA = shuffled.slice(0, outfieldPlayers).map(id => playablePlayers.find(p => p.id === id)!);
+          tB = shuffled.slice(outfieldPlayers, totalNeeded).map(id => playablePlayers.find(p => p.id === id)!);
+        } else {
+          tA = [];
+          tB = [];
+        }
       } else {
         const lastSM = subMatches[subMatches.length - 1];
         const prevSM = subMatches.length > 1 ? subMatches[subMatches.length - 2] : null;
@@ -580,28 +665,33 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
         let stayingPlayers: Player[] = [];
         let incomingFromLast: Player[] = [];
 
-        if (!prevSM) {
-          if (lastSM.scoreB > lastSM.scoreA) {
-            stayingPlayers = lastSM.teamB;
-            incomingFromLast = lastSM.teamB;
-          } else {
-            stayingPlayers = lastSM.teamA;
-            incomingFromLast = lastSM.teamB;
-          }
+        if (gameTimeMode === 'winnerstays') {
+          stayingPlayers = (lastSM.scoreB > lastSM.scoreA) ? lastSM.teamB : lastSM.teamA;
+          incomingFromLast = [...lastSM.teamA, ...lastSM.teamB];
         } else {
-          const wasInPrev = (pId: string) => prevSM.teamA.some(p => p.id === pId) || prevSM.teamB.some(p => p.id === pId);
-          const teamAPlayedTwo = lastSM.teamA.some(p => wasInPrev(p.id));
-          const teamBPlayedTwo = lastSM.teamB.some(p => wasInPrev(p.id));
-
-          if (teamAPlayedTwo && !teamBPlayedTwo) {
-            stayingPlayers = lastSM.teamB;
-            incomingFromLast = lastSM.teamB;
-          } else if (teamBPlayedTwo && !teamAPlayedTwo) {
-            stayingPlayers = lastSM.teamA;
-            incomingFromLast = lastSM.teamA;
+          if (!prevSM) {
+            if (lastSM.scoreB > lastSM.scoreA) {
+              stayingPlayers = lastSM.teamB;
+              incomingFromLast = lastSM.teamB;
+            } else {
+              stayingPlayers = lastSM.teamA;
+              incomingFromLast = lastSM.teamB;
+            }
           } else {
-            stayingPlayers = (lastSM.scoreB > lastSM.scoreA) ? lastSM.teamB : lastSM.teamA;
-            incomingFromLast = stayingPlayers;
+            const wasInPrev = (pId: string) => prevSM.teamA.some(p => p.id === pId) || prevSM.teamB.some(p => p.id === pId);
+            const teamAPlayedTwo = lastSM.teamA.some(p => wasInPrev(p.id));
+            const teamBPlayedTwo = lastSM.teamB.some(p => wasInPrev(p.id));
+
+            if (teamAPlayedTwo && !teamBPlayedTwo) {
+              stayingPlayers = lastSM.teamB;
+              incomingFromLast = lastSM.teamB;
+            } else if (teamBPlayedTwo && !teamAPlayedTwo) {
+              stayingPlayers = lastSM.teamA;
+              incomingFromLast = lastSM.teamA;
+            } else {
+              stayingPlayers = (lastSM.scoreB > lastSM.scoreA) ? lastSM.teamB : lastSM.teamA;
+              incomingFromLast = stayingPlayers;
+            }
           }
         }
 
@@ -984,7 +1074,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
 
     return (
       <div className="space-y-2 animate-fade-in relative mb-24">
-        <Button variant="brand" size="sm" onClick={() => setView('details')} className="flex items-center gap-1 text-black pl-3 pr-4" leftIcon={<span>←</span>}>Voltar</Button>
+        <Button variant="brand" size="sm" onClick={() => setView('details')} className="flex items-center gap-1 text-black pl-3 pr-4" leftIcon={<ArrowLeft className="h-4 w-4" />}>Voltar</Button>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Sidebar: Presentes (Top on Mobile, Left on Desktop) */}
           <div className="lg:col-span-4 lg:order-1 lg:sticky lg:top-10">
@@ -1045,7 +1135,120 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
 
           {/* Main Area: Arena (Bottom on Mobile, Right on Desktop) */}
           <div className="lg:col-span-8 lg:order-2 space-y-8">
-            <header className="mb-2"><h3 className="text-3xl font-black text-navy-900 mb-2">Arena Futgol <span className="text-sm bg-brand-500 text-white px-3 py-1 rounded-full align-middle ml-2">LIVE</span></h3></header>
+            <header className="mb-2 flex items-center justify-between">
+              <h3 className="text-3xl font-black text-navy-900 mb-2">Arena ao Vivo<span className="text-sm bg-brand-500 text-white px-3 py-1 rounded-full align-middle ml-2">LIVE</span></h3>
+              {isAdmin && (
+                <button onClick={() => setIsArenaSettingsOpen(true)} className="p-2 rounded-xl hover:bg-navy-100 text-navy-400 hover:text-navy-700 transition-all" title="Configurações da Arena">
+                  <Settings className="h-6 w-6" />
+                </button>
+              )}
+            </header>
+
+            {/* Modal de Configurações da Arena */}
+            <Modal isOpen={isArenaSettingsOpen} onClose={() => setIsArenaSettingsOpen(false)} title="Configurações da Arena" width="sm">
+              <div className="space-y-6">
+                {/* Formato dos Times */}
+                <div>
+                  <label className="text-[11px] font-black text-navy-400 uppercase tracking-widest mb-2 block">Formato dos Times</label>
+                  <div className="flex items-center justify-between p-3 bg-navy-50/50 rounded-xl border border-navy-100">
+                    <span className="text-sm font-bold text-navy-900">{outfieldPlayers} x {outfieldPlayers} + Goleiro</span>
+                    <select value={outfieldPlayers} onChange={(e) => setOutfieldPlayers(Number(e.target.value))} className="bg-white rounded-xl px-3 py-2 font-black text-navy-900 outline-none focus:ring-2 focus:ring-brand-500/20 transition-all cursor-pointer border border-navy-200">
+                      {[4, 5, 6, 7, 8, 9, 10].map(n => (<option key={n} value={n}>{n}x{n}</option>))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Formação do Primeiro Jogo */}
+                <div>
+                  <label className="text-[11px] font-black text-navy-400 uppercase tracking-widest mb-2 block">Formação do 1º Jogo</label>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => setTeamFormationMode('manual')}
+                      className={cn(
+                        "w-full text-left p-3 rounded-xl border-2 transition-all",
+                        teamFormationMode === 'manual'
+                          ? "border-brand-500 bg-brand-50 shadow-sm"
+                          : "border-navy-100 bg-white hover:border-navy-200"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0", teamFormationMode === 'manual' ? "border-brand-500" : "border-navy-300")}>
+                          {teamFormationMode === 'manual' && <div className="w-2 h-2 rounded-full bg-brand-500" />}
+                        </div>
+                        <div>
+                          <span className="text-sm font-bold text-navy-900 block">Manual</span>
+                          <span className="text-[11px] text-navy-400">Times criados vazios para seleção manual</span>
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setTeamFormationMode('automatic')}
+                      className={cn(
+                        "w-full text-left p-3 rounded-xl border-2 transition-all",
+                        teamFormationMode === 'automatic'
+                          ? "border-brand-500 bg-brand-50 shadow-sm"
+                          : "border-navy-100 bg-white hover:border-navy-200"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0", teamFormationMode === 'automatic' ? "border-brand-500" : "border-navy-300")}>
+                          {teamFormationMode === 'automatic' && <div className="w-2 h-2 rounded-full bg-brand-500" />}
+                        </div>
+                        <div>
+                          <span className="text-sm font-bold text-navy-900 block">Automático</span>
+                          <span className="text-[11px] text-navy-400">Seleciona aleatoriamente entre os primeiros presentes</span>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Formato de Tempo de Jogo */}
+                <div>
+                  <label className="text-[11px] font-black text-navy-400 uppercase tracking-widest mb-2 block">Formato de Tempo de Jogo</label>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => setGameTimeMode('winnerstays')}
+                      className={cn(
+                        "w-full text-left p-3 rounded-xl border-2 transition-all",
+                        gameTimeMode === 'winnerstays'
+                          ? "border-brand-500 bg-brand-50 shadow-sm"
+                          : "border-navy-100 bg-white hover:border-navy-200"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0", gameTimeMode === 'winnerstays' ? "border-brand-500" : "border-navy-300")}>
+                          {gameTimeMode === 'winnerstays' && <div className="w-2 h-2 rounded-full bg-brand-500" />}
+                        </div>
+                        <div>
+                          <span className="text-sm font-bold text-navy-900 block">Quem ganha fica</span>
+                          <span className="text-[11px] text-navy-400">O time vencedor permanece e enfrenta o próximo</span>
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setGameTimeMode('play2leave')}
+                      className={cn(
+                        "w-full text-left p-3 rounded-xl border-2 transition-all",
+                        gameTimeMode === 'play2leave'
+                          ? "border-brand-500 bg-brand-50 shadow-sm"
+                          : "border-navy-100 bg-white hover:border-navy-200"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0", gameTimeMode === 'play2leave' ? "border-brand-500" : "border-navy-300")}>
+                          {gameTimeMode === 'play2leave' && <div className="w-2 h-2 rounded-full bg-brand-500" />}
+                        </div>
+                        <div>
+                          <span className="text-sm font-bold text-navy-900 block">Jogar 2 e sair</span>
+                          <span className="text-[11px] text-navy-400">Cada time joga 2 partidas e sai para dar vez</span>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </Modal>
 
             {waitingPlayers.length > 0 && (
               <Card className="p-5 bg-navy-50/50 border-navy-100">
@@ -1059,9 +1262,16 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
-              <div className="flex items-center justify-between p-2 bg-white rounded-2xl border-2 border-navy-100 shadow-sm">
-                <div className="flex flex-col"><span className="text-[10px] font-black text-navy-400 uppercase tracking-tighter">Formato</span><span className="text-sm font-bold text-navy-900">{outfieldPlayers} x {outfieldPlayers} + Goleiro</span></div>
-                <select value={outfieldPlayers} onChange={(e) => setOutfieldPlayers(Number(e.target.value))} className="bg-navy-50 rounded-xl px-3 py-2 font-black text-navy-900 outline-none focus:ring-2 focus:ring-brand-500/20 transition-all cursor-pointer">{[4, 5, 6, 7, 8, 9, 10].map(n => (<option key={n} value={n}>{n}x{n}</option>))}</select>
+              <div className="flex items-center gap-3 p-2 bg-white rounded-2xl border-2 border-navy-100 shadow-sm">
+                <div className="flex flex-col flex-1">
+                  <span className="text-[10px] font-black text-navy-400 uppercase tracking-tighter">Formato</span>
+                  <span className="text-sm font-bold text-navy-900">{outfieldPlayers}x{outfieldPlayers}</span>
+                </div>
+                <div className="w-px h-8 bg-navy-100" />
+                <div className="flex flex-col flex-1">
+                  <span className="text-[10px] font-black text-navy-400 uppercase tracking-tighter">1º Jogo</span>
+                  <span className="text-sm font-bold text-navy-900">{teamFormationMode === 'manual' ? 'Manual' : 'Auto'}</span>
+                </div>
               </div>
               <Button className="h-16 rounded-2xl font-black text-xl shadow-xl shadow-brand-500/10" onClick={() => handleGenerateTeams(selectedMatch)} isLoading={isBalancing} disabled={arrivedPlayers.length < 2}>PRÓXIMO JOGO</Button>
             </div>
@@ -1131,7 +1341,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
 
                               <div className="flex items-center flex-shrink-0">
                                 {isAdmin && !sm.finished && (
-                                  <button onClick={(e) => { e.stopPropagation(); setActivePlayerMenu(activePlayerMenu?.playerId === p.id && activePlayerMenu?.subMatchId === sm.id ? null : { subMatchId: sm.id, playerId: p.id }); }} className="text-navy-300 hover:text-navy-900 transition-all p-1">⋮</button>
+                                  <button onClick={(e) => { e.stopPropagation(); setActivePlayerMenu(activePlayerMenu?.playerId === p.id && activePlayerMenu?.subMatchId === sm.id ? null : { subMatchId: sm.id, playerId: p.id }); }} className="text-navy-300 hover:text-navy-900 transition-all p-1"><MoreVertical className="h-4 w-4" /></button>
                                 )}
                               </div>
                               {activePlayerMenu?.playerId === p.id && activePlayerMenu?.subMatchId === sm.id && (
@@ -1288,7 +1498,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
 
     return (
       <div className="space-y-6 animate-fade-in relative pb-10">
-        <Button variant="ghost" size="sm" onClick={() => { setView('list'); setSelectedMatch(null); }} leftIcon={<span>←</span>} className="pl-0 text-navy-400">Voltar para lista</Button>
+        <Button variant="ghost" size="sm" onClick={() => { setView('list'); setSelectedMatch(null); }} leftIcon={<ArrowLeft className="h-4 w-4" />} className="pl-0 text-navy-400">Voltar para lista</Button>
         <Card className="border-l-4 border-l-brand-500 p-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <div>
             <h3 className="text-3xl font-black text-navy-900">{field?.name || 'Local'}</h3>
@@ -1311,7 +1521,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                   </div>
                 }
               >
-                Arena
+                {activeGroup.matchLabel || 'Arena'}
               </Button>
             )}
             {isAdmin && !selectedMatch.finished && !selectedMatch.isCanceled && (
@@ -1366,9 +1576,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                 className="p-2 text-navy-400 hover:text-brand-600 transition-all rounded-full hover:bg-white/50"
                 title="Atualizar Lista"
               >
-                <svg className={cn("w-5 h-5", isLoading && "animate-spin")} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
+                <RefreshCw className={cn("h-5 w-5", isLoading && "animate-spin")} />
               </button>
 
               <button
@@ -1376,9 +1584,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                 className="p-2 text-navy-400 hover:text-navy-900 transition-all duration-300 rounded-full hover:bg-black/5"
                 style={{ transform: isPlayerListCollapsed ? 'rotate(-180deg)' : 'rotate(0deg)' }}
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
-                </svg>
+                <ChevronDown className="h-5 w-5" strokeWidth={3} />
               </button>
             </div>
           </div>
@@ -1478,10 +1684,42 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
   return (
     <div className="space-y-8 relative animate-fade-in pb-20">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h3 className="text-3xl font-black text-navy-900 uppercase tracking-tighter">Próximos Confrontos</h3>
+        <div className="space-y-1">
+          <h3 className="text-3xl font-black text-navy-900 uppercase tracking-tighter">{
+          (() => {
+            const label = activeGroup.matchLabel;
+            const map: Record<string, string> = {
+              'Pelada': 'Próximas Peladas',
+              'Rodada': 'Próximas Rodadas',
+              'Racha': 'Próximos Rachas',
+              'Baba': 'Próximos Babas',
+            };
+            return map[label || ''] || 'Próximos Confrontos';
+          })()
+        }</h3>
+          {isAdmin && (
+            <p className="text-xs text-navy-500 font-medium">
+              Busque uma <span className="font-bold">quadra disponível</span> para já criar o confronto com data, horário e local preenchidos.
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="flex-1 sm:flex-none bg-white border-2 border-navy-100 rounded-2xl py-2 px-4 font-black text-xs text-navy-900 focus:border-brand-500 outline-none" />
-          {isAdmin && <Button onClick={openNewMatchModal} className="shadow-lg shadow-brand-500/20 px-6">+ NOVO</Button>}
+          {isAdmin && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                className="shadow-sm border-brand-200 text-brand-700 px-4 whitespace-nowrap"
+                onClick={() => setIsMarketplaceOpen(true)}
+              >
+                Buscar Campo/Quadra
+              </Button>
+              <Button onClick={openNewMatchModal} className="shadow-lg shadow-brand-500/20 px-6 whitespace-nowrap" leftIcon={<Plus className="h-4 w-4" />}>
+                Novo Confronto
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -1510,7 +1748,7 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                 </div>
                 <div className="min-w-0 pt-1">
                   <h4 className="font-black text-navy-900 uppercase truncate text-lg group-hover:text-brand-600 transition-colors">{field?.name || 'LocalIndefinido'}</h4>
-                  <p className="text-sm font-bold text-navy-400 mt-1 flex items-center gap-2"><span>🕒 {match.time}</span></p>
+                  <p className="text-sm font-bold text-navy-400 mt-1 flex items-center gap-2"><Clock className="h-3.5 w-3.5" /> {match.time}</p>
                   <div className="mt-4 flex items-center gap-3">
                     <div className="bg-navy-50 px-3 py-1 rounded-full"><span className="text-[10px] font-black text-navy-600 uppercase">{match.confirmedPlayerIds.length} Atletas</span></div>
                     <span className={cn("text-[9px] font-black uppercase tracking-widest", statusTextClass)}>{statusText}</span>
@@ -1527,17 +1765,14 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
                     className="p-2 bg-white rounded-xl shadow-lg border border-navy-100 text-navy-400 hover:text-brand-600 hover:border-brand-200 transition-all"
                     title="Editar Partida"
                   >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                    <Pencil className="h-4 w-4" />
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); setMatchToDelete(match.id); }}
                     className="p-2 bg-white rounded-xl shadow-lg border border-navy-100 text-navy-400 hover:text-red-600 hover:border-red-200 transition-all"
                     title="Cancelar Partida"
                   >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 11-12.728 12.728 9 9 0 0112.728-12.728z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6.343 17.657l11.314-11.314" />
-                    </svg>
+                    <Ban className="h-4 w-4" />
                   </button>
                 </div>
               )}
@@ -1573,6 +1808,17 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
         <p className="text-navy-600 mb-8 font-medium">Tem certeza que deseja cancelar esta pelada? Os dados ficarão preservados, mas o jogo ficará marcado como cancelado.</p>
         <div className="flex gap-4"><Button variant="ghost" className="flex-1 h-12" onClick={() => setMatchToDelete(null)}>Manter</Button><Button variant="danger" className="flex-1 h-12 shadow-lg shadow-red-500/20" onClick={confirmDelete}>Sim, Cancelar</Button></div>
       </Modal>
+
+      {isMarketplaceOpen && (
+        <Modal isOpen onClose={() => setIsMarketplaceOpen(false)} title="Buscar Campo ou Quadra Disponíveis" width="xl">
+          <MarketplaceScreen
+            currentUser={currentUser}
+            activeGroup={activeGroup}
+            onBooked={handleBookAndCreateMatch}
+            onClose={() => setIsMarketplaceOpen(false)}
+          />
+        </Modal>
+      )}
     </div>
   );
 };

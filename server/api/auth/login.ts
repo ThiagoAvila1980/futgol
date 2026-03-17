@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { createHash } from 'crypto';
+import bcrypt from 'bcryptjs';
 import { ready } from '../_db';
 
 export default async function (req: any, res: any) {
@@ -17,21 +18,35 @@ export default async function (req: any, res: any) {
   const email = String(body.email || '');
   const password = String(body.password || '');
   if (!email || !password) {
-    res.statusCode = 400;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ detail: 'Preencha todos os campos' }));
-    return;
+    return res.status(400).json({ detail: 'Preencha todos os campos' });
   }
   const sql = await ready();
-  const hash = createHash('sha256').update(password).digest('hex');
-  const rows = await sql(`SELECT id, email, name, phone, avatar, birth_date, favorite_team, primary_group_id, usuario, role FROM players WHERE email = $1 AND password_hash = $2`, [email, hash]) as any[];
+  const rows = await sql(
+    `SELECT id, email, name, phone, avatar, birth_date, favorite_team, primary_group_id, usuario, role, password_hash FROM players WHERE email = $1`,
+    [email]
+  ) as any[];
   if (!rows.length) {
-    res.statusCode = 400;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ detail: 'Credenciais inválidas' }));
-    return;
+    return res.status(400).json({ detail: 'Credenciais inválidas' });
   }
   const row = rows[0];
+  const storedHash = row.password_hash;
+
+  let passwordValid = false;
+  if (storedHash.startsWith('$2')) {
+    passwordValid = await bcrypt.compare(password, storedHash);
+  } else {
+    const sha256 = createHash('sha256').update(password).digest('hex');
+    passwordValid = sha256 === storedHash;
+    if (passwordValid) {
+      const bcryptHash = await bcrypt.hash(password, 12);
+      await sql(`UPDATE players SET password_hash = $1 WHERE id = $2`, [bcryptHash, row.id]);
+    }
+  }
+
+  if (!passwordValid) {
+    return res.status(400).json({ detail: 'Credenciais inválidas' });
+  }
+
   const user = {
     id: String(row.id),
     name: String(row.name),
@@ -45,8 +60,6 @@ export default async function (req: any, res: any) {
     role: row.role || 'user'
   };
   const secret = process.env.JWT_SECRET || 'dev-secret';
-  const access = jwt.sign({ sub: user.id, email: user.email, name: user.name, role: user.role }, secret, { expiresIn: '1h' });
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'application/json');
-  res.end(JSON.stringify({ user, access, refresh: '' }));
+  const access = jwt.sign({ sub: user.id, email: user.email, name: user.name, role: user.role }, secret, { expiresIn: '7d' });
+  res.status(200).json({ user, access, refresh: '' });
 }

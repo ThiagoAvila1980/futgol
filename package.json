@@ -9,5 +9,12 @@
     "server:build": "npm --prefix ./server run build",
     "compose:up": "docker compose up -d --build",
     "compose:down": "docker compose down"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.0.3",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.1",
+    "typescript-eslint": "^8.57.1"
   }
 }

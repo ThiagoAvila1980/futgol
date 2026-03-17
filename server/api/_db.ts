@@ -200,6 +200,7 @@ export async function ensureSchema() {
   await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS sub_matches TEXT`);
   await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS mvp_votes TEXT`);
   await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS is_canceled INTEGER DEFAULT 0`);
+  await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS player_points TEXT`);
 
   // 6. Transactions
   await sql(`CREATE TABLE IF NOT EXISTS transactions(
@@ -261,6 +262,58 @@ export async function ensureSchema() {
     const posId = createHash('md5').update(p).digest('hex');
     await sql(`INSERT INTO position_functions(id, name) VALUES($1, $2) ON CONFLICT DO NOTHING`, [posId, p]);
   }
+
+  // Push Subscriptions
+  await sql(`CREATE TABLE IF NOT EXISTS push_subscriptions(
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+    player_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    endpoint TEXT NOT NULL UNIQUE,
+    keys_p256dh TEXT NOT NULL,
+    keys_auth TEXT NOT NULL,
+    created_at TEXT
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_push_sub_player ON push_subscriptions(player_id)`);
+
+  // Achievements / Gamification
+  await sql(`CREATE TABLE IF NOT EXISTS achievements(
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+    player_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    group_id TEXT REFERENCES groups(id) ON DELETE CASCADE,
+    badge TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    awarded_at TEXT NOT NULL
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_achievements_player ON achievements(player_id)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_achievements_group ON achievements(group_id)`);
+
+  // Field Reviews (Marketplace)
+  await sql(`CREATE TABLE IF NOT EXISTS field_reviews(
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+    field_id TEXT NOT NULL REFERENCES fields(id) ON DELETE CASCADE,
+    player_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+    comment TEXT,
+    created_at TEXT NOT NULL
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_field_reviews_field ON field_reviews(field_id)`);
+
+  // Field Bookings (Marketplace)
+  await sql(`CREATE TABLE IF NOT EXISTS field_bookings(
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+    field_id TEXT NOT NULL REFERENCES fields(id) ON DELETE CASCADE,
+    group_id TEXT REFERENCES groups(id) ON DELETE SET NULL,
+    booked_by TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    total_price REAL,
+    status TEXT DEFAULT 'pending',
+    payment_method TEXT,
+    created_at TEXT NOT NULL
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_field_bookings_field ON field_bookings(field_id)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_field_bookings_date ON field_bookings(date)`);
 }
 
 export async function ready() {

@@ -7,6 +7,7 @@ import { Input } from './ui/Input';
 import { PhoneInput, formatPhone } from './ui/PhoneInput';
 import { Card } from './ui/Card';
 import { TeamAutocomplete } from './ui/TeamAutocomplete';
+import { ArrowLeft, UserCircle } from 'lucide-react';
 
 interface ProfileScreenProps {
   user: User;
@@ -83,7 +84,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onSave, onCa
             onClick={onCancel}
             className="absolute top-4 left-4 bg-white/10 hover:bg-white/20 text-white border border-white/10 backdrop-blur-md"
             size="sm"
-            leftIcon={<span>←</span>}
+            leftIcon={<ArrowLeft className="h-4 w-4" />}
           >
             Voltar
           </Button>
@@ -95,7 +96,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, onSave, onCa
                   <img src={avatar} alt="Avatar" className={`w-full h-full object-cover transition-opacity ${isUploading ? 'opacity-50' : ''}`} />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-navy-300 bg-navy-50">
-                    <svg className="w-16 h-16" fill="currentColor" viewBox="0 0 24 24"><path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                    <UserCircle className="h-16 w-16" />
                   </div>
                 )}
               </div>

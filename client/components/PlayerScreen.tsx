@@ -8,15 +8,25 @@ import api from '../services/api';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
+import { Badge } from './ui/Badge';
 import { PhoneInput, formatPhone } from './ui/PhoneInput';
 import { Modal } from './ui/Modal';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
 import { TeamAutocomplete } from './ui/TeamAutocomplete';
-
-function cn(...inputs: (string | undefined | null | false)[]) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '@/lib/utils';
+import {
+  Search,
+  ChevronDown,
+  Plus,
+  Bell,
+  Pencil,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  MessageSquare,
+  Crown,
+  Shield,
+  Star,
+} from 'lucide-react';
 
 interface PlayerScreenProps {
   players: Player[];
@@ -508,7 +518,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
               variant={pendingRequests.length > 0 ? 'danger' : 'outline'}
               onClick={() => setIsRequestsModalOpen(true)}
               className={cn("whitespace-nowrap transition-all", pendingRequests.length > 0 && "animate-pulse")}
-              leftIcon={<span>🔔</span>}
+              leftIcon={<Bell className="h-4 w-4" />}
             >
               Solicitações
               {pendingRequests.length > 0 && (
@@ -522,11 +532,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
               placeholder="Buscar..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              icon={
-                <svg className="h-5 w-5 text-navy-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                </svg>
-              }
+              icon={<Search className="h-5 w-5" />}
             />
           </div>
 
@@ -542,7 +548,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
                 <option value="rating_asc">Menores (1★)</option>
               </select>
               <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-navy-500">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                <ChevronDown className="h-4 w-4" />
               </div>
             </div>
           </div>
@@ -560,13 +566,13 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
                 <option value="admins">Administradores</option>
               </select>
               <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-navy-500">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                <ChevronDown className="h-4 w-4" />
               </div>
             </div>
           </div>
 
           {isAdmin && (
-            <Button onClick={openNewPlayerModal} leftIcon={<span className="text-xl">+</span>} className="whitespace-nowrap">
+            <Button onClick={openNewPlayerModal} leftIcon={<Plus className="h-5 w-5" />} className="whitespace-nowrap">
               Novo Membro
             </Button>
           )}
@@ -616,8 +622,8 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
                           {player.isMonthlySubscriber ? 'M' : player.isGuest ? 'C' : 'A'}
                         </div>
                       )}
-                      {isPlayerOwner && <span title="Dono do Grupo" className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm text-xs">👑</span>}
-                      {(isPlayerAdmin || player.role === 'admin') && !isPlayerOwner && <span title="Administrador" className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm text-xs">🛡️</span>}
+                      {isPlayerOwner && <span title="Dono do Grupo" className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Crown className="h-3.5 w-3.5 text-yellow-500" /></span>}
+                      {(isPlayerAdmin || player.role === 'admin') && !isPlayerOwner && <span title="Administrador" className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Shield className="h-3.5 w-3.5 text-blue-500" /></span>}
                     </div>
 
                     <div className="flex-1 min-w-0">
@@ -671,21 +677,17 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
                         className="p-2 bg-brand-50 text-brand-600 rounded-lg hover:bg-brand-100 transition-colors"
                         title="Conversar no WhatsApp"
                       >
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-8.683-2.031-.967-.272-.297-.471-.446-.669-.446-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306.943.32 1.286.32.395 0 1.237-.52 1.411-1.015.174-.495.174-.916.124-1.015-.05-.099-.248-.174-.545-.322z" /></svg>
+                        <MessageSquare className="h-5 w-5" />
                       </a>
                     )}
 
                     {isAdmin && (
                       <>
                         <button onClick={() => handleEdit(player)} className="text-navy-400 hover:text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors" title="Editar">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                          </svg>
+                          <Pencil className="h-5 w-5" />
                         </button>
                         <button onClick={() => setPlayerToDelete(player.id)} className="text-navy-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors" title="Excluir">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
+                          <Trash2 className="h-5 w-5" />
                         </button>
                       </>
                     )}
@@ -711,7 +713,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
               }}
               className="px-4 py-2 text-navy-600 font-bold hover:bg-navy-100 disabled:opacity-30"
             >
-              ← Anterior
+              <ChevronLeft className="h-4 w-4" /> Anterior
             </Button>
 
             <div className="flex items-center gap-1">
@@ -757,7 +759,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
               }}
               className="px-4 py-2 text-navy-600 font-bold hover:bg-navy-100 disabled:opacity-30 pb-1"
             >
-              Próximo →
+              Próximo <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
           <div className="text-xs font-bold text-navy-400 uppercase tracking-widest">
@@ -915,7 +917,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ players, matches, on
                   ))}
                 </select>
                 <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-navy-400">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                  <ChevronDown className="h-4 w-4" />
                 </div>
               </div>
             </div>

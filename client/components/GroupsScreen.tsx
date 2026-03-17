@@ -8,8 +8,25 @@ import { Input } from './ui/Input';
 import { PhoneInput } from './ui/PhoneInput';
 import { Card } from './ui/Card';
 import { Modal } from './ui/Modal';
+import { Badge } from './ui/Badge';
+import { Textarea } from './ui/Textarea';
 import { CityInput } from './CityInput';
 import { CurrencyInput } from './ui/CurrencyInput';
+import { cn } from '@/lib/utils';
+import {
+  Plus,
+  RefreshCw,
+  Globe,
+  Search,
+  MapPin,
+  ChevronDown,
+  Settings,
+  LogOut as LeaveIcon,
+  Camera,
+  CheckCircle2,
+  Clock as ClockIcon,
+  XCircle,
+} from 'lucide-react';
 
 interface GroupsScreenProps {
   user: User;
@@ -53,6 +70,7 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
   const [newFixedPerPerson, setNewFixedPerPerson] = useState<string>('0');
   const [newMonthlyFee, setNewMonthlyFee] = useState<string>('0');
   const [newGroupCity, setNewGroupCity] = useState<string>('');
+  const [newMatchLabel, setNewMatchLabel] = useState<string>('Confronto');
   const groupNameInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -70,6 +88,7 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
     setNewFixedPerPerson('0');
     setNewMonthlyFee('0');
     setNewGroupCity('');
+    setNewMatchLabel('Confronto');
     setShowCreateModal(true);
   };
 
@@ -178,7 +197,8 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
         fixedAmount: newPaymentMode === 'fixed' ? (parseInt(newFixedPerPerson || '0', 10) / 100) : 0,
         monthlyFee: (parseInt(newMonthlyFee || '0', 10) / 100),
         city: newGroupCity.trim(),
-        admins: [user.id] // Creator is always the first admin
+        matchLabel: newMatchLabel,
+        admins: [user.id]
       };
 
       const savedGroup = await storage.groups.save(newGroup);
@@ -263,6 +283,7 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
     setNewFixedPerPerson(String(Math.round((group.fixedAmount ?? 0) * 100)));
     setNewMonthlyFee(String(Math.round(((group as any).monthlyFee ?? 0) * 100)));
     setNewGroupCity(group.city || '');
+    setNewMatchLabel(group.matchLabel || 'Confronto');
     setShowEditModal(true);
   };
 
@@ -324,21 +345,20 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
                 <Button
                   onClick={openCreateModal}
                   className="mr-30 rounded-2xl px-6 shadow-lg shadow-brand-500/20"
-                  rightIcon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>}
+                  rightIcon={<Plus className="h-5 w-5" />}
                 >
                   Criar Novo Grupo
                 </Button>
 
                 <Button
                   variant="outline"
+                  size="icon"
                   onClick={loadGroups}
                   isLoading={loading}
                   className="rounded-2xl w-12 h-12 p-0 border-navy-100 hover:border-brand-500 hover:bg-brand-50 shadow-sm"
                   title="Atualizar lista"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-navy-600 group-hover:text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
+                  <RefreshCw className="h-5 w-5 text-navy-600" />
                 </Button>
               </div>
             </div>
@@ -375,7 +395,7 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
             <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-6">
               <div>
                 <h3 className="font-heading font-black text-navy-900 text-2xl flex items-center gap-2">
-                  <span className="bg-accent-100 text-accent-700 p-2 rounded-xl text-lg shadow-sm">🌍</span>
+                  <span className="bg-accent-100 text-accent-700 p-2 rounded-xl shadow-sm"><Globe className="h-5 w-5" /></span>
                   Explorar Comunidade
                 </h3>
                 <p className="text-sm text-navy-500 mt-1 ml-1">Descubra novos grupos públicos e solicite sua entrada.</p>
@@ -388,14 +408,14 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Buscar por nome ou esporte..."
-                  icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>}
+                  icon={<Search className="h-4 w-4" />}
                 />
                 <CityInput
                   className="w-full md:w-84 shadow-sm"
                   value={cityFilter}
                   onChange={setCityFilter}
                   placeholder="Filtrar por cidade..."
-                  icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 12.414m0 0a4 4 0 10-5.657 5.657 4 4 0 005.657-5.657z" /></svg>}
+                  icon={<MapPin className="h-4 w-4" />}
                 />
               </div>
             </div>
@@ -452,7 +472,27 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
                 <option>Futsal</option>
               </select>
               <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-navy-400">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                <ChevronDown className="h-4 w-4" />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-navy-700 mb-1.5 ml-1">Referência aos jogos do grupo</label>
+            <div className="relative">
+              <select
+                value={newMatchLabel}
+                onChange={(e) => setNewMatchLabel(e.target.value)}
+                className="w-full bg-white border border-navy-200 rounded-xl px-4 py-3 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all font-medium appearance-none"
+              >
+                <option>Confronto</option>
+                <option>Pelada</option>
+                <option>Racha</option>
+                <option>Rodada</option>
+                <option>Baba</option>
+              </select>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-navy-400">
+                <ChevronDown className="h-4 w-4" />
               </div>
             </div>
           </div>
@@ -497,7 +537,7 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
             value={newGroupCity}
             onChange={setNewGroupCity}
             placeholder="Ex: São Paulo, SP"
-            icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 12.414m0 0a4 4 0 10-5.657 5.657 4 4 0 005.657-5.657z" /></svg>}
+            icon={<MapPin className="h-4 w-4" />}
           />
 
           <div className="flex flex-col sm:flex-row gap-3">
@@ -517,7 +557,7 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
                   <option value="fixed">Valor fixo</option>
                 </select>
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-navy-400">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  <ChevronDown className="h-4 w-4" />
                 </div>
               </div>
             </div>
@@ -559,7 +599,8 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
                 paymentMode: newPaymentMode,
                 fixedAmount: newPaymentMode === 'fixed' ? (parseInt(newFixedPerPerson || '0', 10) / 100) : 0,
                 monthlyFee: (parseInt(newMonthlyFee || '0', 10) / 100),
-                city: newGroupCity.trim()
+                city: newGroupCity.trim(),
+                matchLabel: newMatchLabel
               };
               await storage.groups.save(updated);
 
@@ -600,7 +641,27 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
                   <option>Futsal</option>
                 </select>
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-navy-400">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  <ChevronDown className="h-4 w-4" />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-navy-700 mb-1.5 ml-1">Referência aos jogos do grupo</label>
+              <div className="relative">
+                <select
+                  value={newMatchLabel}
+                  onChange={(e) => setNewMatchLabel(e.target.value)}
+                  className="w-full bg-white border border-navy-200 rounded-xl px-4 py-3 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all font-medium appearance-none"
+                >
+                  <option>Confronto</option>
+                  <option>Pelada</option>
+                  <option>Racha</option>
+                  <option>Rodada</option>
+                  <option>Baba</option>
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-navy-400">
+                  <ChevronDown className="h-4 w-4" />
                 </div>
               </div>
             </div>
@@ -626,7 +687,7 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
               label="Cidade"
               value={newGroupCity}
               onChange={setNewGroupCity}
-              icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 12.414m0 0a4 4 0 10-5.657 5.657 4 4 0 005.657-5.657z" /></svg>}
+              icon={<MapPin className="h-4 w-4" />}
             />
 
             <div className="flex flex-col sm:flex-row gap-3">
@@ -646,7 +707,7 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
                     <option value="fixed">Valor fixo</option>
                   </select>
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-navy-400">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    <ChevronDown className="h-4 w-4" />
                   </div>
                 </div>
               </div>
@@ -741,15 +802,12 @@ export const GroupsScreen: React.FC<GroupsScreenProps> = ({ user, onSelectGroup,
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-navy-700 mb-1.5 ml-1">Mensagem para o Admin</label>
-            <textarea
-              value={joinMessage}
-              onChange={(e) => setJoinMessage(e.target.value)}
-              placeholder="Ex: Olá, gostaria de entrar no grupo. Jogo de goleiro."
-              className="w-full bg-white border border-navy-200 rounded-xl px-4 py-3 text-navy-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all font-medium min-h-[100px]"
-            />
-          </div>
+          <Textarea
+            label="Mensagem para o Admin"
+            value={joinMessage}
+            onChange={(e) => setJoinMessage(e.target.value)}
+            placeholder="Ex: Olá, gostaria de entrar no grupo. Jogo de goleiro."
+          />
 
           <div className="flex gap-3 pt-4">
             <Button type="button" variant="ghost" onClick={() => setShowJoinModal(false)} className="flex-1">Cancelar</Button>
@@ -909,7 +967,7 @@ const GroupDiscoveryCard: React.FC<{ group: Group; isPending?: boolean; onJoin: 
       <div>
         <h3 className="font-bold text-navy-900 text-lg leading-tight">{group.name}</h3>
         <p className="text-xs text-navy-500 font-medium mt-1">{group.sport}</p>
-        {group.city && <p className="text-xs text-navy-400 mt-1 flex items-center gap-1"><span className="opacity-70">🏙️</span> {group.city}</p>}
+        {group.city && <p className="text-xs text-navy-400 mt-1 flex items-center gap-1"><MapPin className="h-3 w-3 opacity-70" /> {group.city}</p>}
       </div>
 
       {isPending ? (

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { CalendarDays } from 'lucide-react';
 
 interface DateInputProps {
   value: string;
@@ -102,9 +103,7 @@ export const DateInput: React.FC<DateInputProps> = ({ value, onChange, className
         className="absolute right-3.5 top-1/2 -translate-y-1/2 text-navy-400 hover:text-brand-600 transition-colors"
         title="Selecionar data"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M6 2a1 1 0 011 1v1h6V3a1 1 0 112 0v1h1a2 2 0 012 2v9a2 2 0 01-2 2H3a2 2 0 01-2-2V6a2 2 0 012-2h1V3a1 1 0 012 0v1zm11 6H3v7h14V8z" clipRule="evenodd" />
-        </svg>
+        <CalendarDays className="h-4 w-4" />
       </button>
 
       <input
