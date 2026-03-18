@@ -293,7 +293,9 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ currentUse
             setSelectedField(null);
             setSlots([]);
             setSelectedSlotId(null);
-            onClose && onClose();
+            if (onClose) {
+              onClose();
+            }
           }}
           title="Detalhes do Campo e Horários Disponíveis"
           width="xl"
@@ -437,7 +439,9 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ currentUse
                   setSelectedField(null);
                   setSlots([]);
                   setSelectedSlotId(null);
-                  onClose && onClose();
+                  if (onClose) {
+                    onClose();
+                  }
                 }}
               >
                 Cancelar
