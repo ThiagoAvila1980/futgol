@@ -3,6 +3,8 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
     "client:dev": "npm --prefix ./client run dev",
     "server:dev": "npm --prefix ./server run dev",
     "client:build": "npm --prefix ./client run build",
@@ -11,6 +13,7 @@
     "compose:down": "docker compose down"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.0",
     "@eslint/js": "^10.0.1",
     "eslint": "^10.0.3",
     "eslint-config-prettier": "^10.1.8",

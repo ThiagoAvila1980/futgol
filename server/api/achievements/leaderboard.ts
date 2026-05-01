@@ -30,13 +30,49 @@ export default async function (req: any, res: any) {
       LIMIT 50
     `, [groupId]);
 
+    const badgeRows = (await sql(
+      `SELECT player_id, badge FROM achievements WHERE group_id = $1`,
+      [groupId]
+    )) as { player_id: string; badge: string }[];
+
+    const earnedBadgesByPlayer: Record<string, string[]> = {};
+    for (const row of badgeRows) {
+      const pid = String(row.player_id);
+      if (!earnedBadgesByPlayer[pid]) earnedBadgesByPlayer[pid] = [];
+      earnedBadgesByPlayer[pid].push(String(row.badge));
+    }
+
+    const pjRows = await sql(
+      `SELECT primeiro_jogo_status FROM matches
+       WHERE group_id = $1 AND finished = 1 AND (is_canceled IS NULL OR is_canceled = 0)
+         AND primeiro_jogo_status IS NOT NULL AND TRIM(primeiro_jogo_status) != ''`,
+      [groupId]
+    ) as any[];
+
+    const primeiroJogoXpByPlayer: Record<string, number> = {};
+    for (const row of pjRows) {
+      try {
+        const o = JSON.parse(row.primeiro_jogo_status) as Record<string, string>;
+        for (const [pid, st] of Object.entries(o || {})) {
+          const pts = st === 'V' ? 3 : st === 'E' ? 1 : 0;
+          primeiroJogoXpByPlayer[pid] = (primeiroJogoXpByPlayer[pid] || 0) + pts;
+        }
+      } catch {
+        /* ignore malformed json */
+      }
+    }
+
     const levelThresholds = [0, 5, 15, 30, 50, 80, 120, 170, 230, 300];
-    const result = leaderboard.map((p: any, idx: number) => {
-      const xp = (p.matches_played || 0) * 10 + (p.mvp_count || 0) * 25 + (p.total_badges || 0) * 15;
+    const rows = leaderboard.map((p: any) => {
+      const pid = p.player_id as string;
+      const pj = primeiroJogoXpByPlayer[pid] || 0;
+      const fromMatches = (p.matches_played || 0) * 10;
+      const fromMvp = (p.mvp_count || 0) * 25;
+      const fromBadges = (Number(p.total_badges) || 0) * 15;
+      const xp = fromMatches + fromMvp + fromBadges + pj;
       const level = levelThresholds.findIndex(t => xp < t);
       return {
-        rank: idx + 1,
-        playerId: p.player_id,
+        playerId: pid,
         name: p.name,
         nickname: p.nickname,
         position: p.position,
@@ -47,8 +83,22 @@ export default async function (req: any, res: any) {
         mvpCount: Number(p.mvp_count) || 0,
         xp,
         level: level === -1 ? levelThresholds.length : level,
+        primeiroJogoPoints: pj,
+        earnedBadges: earnedBadgesByPlayer[pid] || [],
+        xpBreakdown: {
+          fromMatches,
+          fromMvp,
+          fromBadges,
+          fromPrimeiroJogo: pj,
+        },
       };
     });
+
+    rows.sort((a, b) => b.xp - a.xp);
+    const result = rows.map((entry, idx) => ({
+      ...entry,
+      rank: idx + 1,
+    }));
 
     res.status(200).json(result);
   } catch (error: any) {

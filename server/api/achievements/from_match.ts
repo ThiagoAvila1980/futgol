@@ -1,4 +1,5 @@
 import { ready } from '../_db';
+import { computePrimeiroJogoPorJogador } from '../matches/primeiro-jogo';
 
 type PlayerPoints = {
   attended: boolean;
@@ -31,7 +32,7 @@ async function awardBadgeIfNeeded(sql: any, opts: { playerId: string; groupId: s
   }
   const existing = await sql(
     `SELECT id FROM achievements WHERE player_id = $1 AND badge = $2 AND group_id = $3`,
-    [playerId, groupId]
+    [playerId, badge, groupId]
   );
   if (existing.length > 0) return;
   const now = new Date().toISOString();
@@ -53,6 +54,7 @@ export async function processAchievementsForMatch(matchId: string) {
   const matchDate = current.date as string;
   const matchTime = (current.time || '00:00') as string;
   const ymCurrent = matchDate.slice(0, 7);
+  const yearCurrent = matchDate.slice(0, 4);
 
   const allMatches = await sql(
     `SELECT * FROM matches 
@@ -88,6 +90,39 @@ export async function processAchievementsForMatch(matchId: string) {
   const focusedPlayers = new Set<string>(Object.keys(currentMatchPoints));
   if (focusedPlayers.size === 0) return;
 
+  let primeiroJogoMap: Record<string, string> = {};
+  try {
+    if (current.primeiro_jogo_status) {
+      primeiroJogoMap = JSON.parse(current.primeiro_jogo_status);
+    }
+  } catch {
+    primeiroJogoMap = {};
+  }
+  if (Object.keys(primeiroJogoMap).length === 0) {
+    let subMatchesRaw: any[] = [];
+    try {
+      subMatchesRaw = current.sub_matches ? JSON.parse(current.sub_matches) : [];
+    } catch {
+      subMatchesRaw = [];
+    }
+    let teamARaw: any[] = [];
+    let teamBRaw: any[] = [];
+    try {
+      teamARaw = current.team_a ? JSON.parse(current.team_a) : [];
+      teamBRaw = current.team_b ? JSON.parse(current.team_b) : [];
+    } catch {
+      teamARaw = [];
+      teamBRaw = [];
+    }
+    primeiroJogoMap = computePrimeiroJogoPorJogador({
+      subMatches: subMatchesRaw,
+      teamA: teamARaw,
+      teamB: teamBRaw,
+      scoreA: Number(current.score_a ?? 0),
+      scoreB: Number(current.score_b ?? 0),
+    }) as Record<string, string>;
+  }
+
   const before: Record<string, Snapshot> = {};
   const after: Record<string, Snapshot> = {};
   const beforeStreak: Record<string, number> = {};
@@ -95,6 +130,7 @@ export async function processAchievementsForMatch(matchId: string) {
 
   const totals: Record<string, Snapshot> = {};
   const monthGoals: Record<string, number> = {};
+  const yearGoals: Record<string, number> = {};
   const monthMatchesAttended: Record<string, number> = {};
   let monthTotalMatches = 0;
 
@@ -146,6 +182,9 @@ export async function processAchievementsForMatch(matchId: string) {
       if (ym === ymCurrent) {
         monthGoals[pid] = (monthGoals[pid] || 0) + (p.goals || 0);
       }
+      if (date.slice(0, 4) === yearCurrent) {
+        yearGoals[pid] = (yearGoals[pid] || 0) + (p.goals || 0);
+      }
     }
 
     if (isCurrent) {
@@ -160,10 +199,6 @@ export async function processAchievementsForMatch(matchId: string) {
   for (const pid of focusedPlayers) {
     const b = before[pid] || { matchesAttended: 0, goals: 0, assists: 0, mvpCount: 0, currentStreak: 0 };
     const a = after[pid] || b;
-
-    if (b.matchesAttended === 0 && a.matchesAttended > 0) {
-      await awardBadgeIfNeeded(sql, { playerId: pid, groupId, badge: 'first_match' });
-    }
 
     for (const threshold of BADGE_THRESHOLDS.matches) {
       if (b.matchesAttended < threshold && a.matchesAttended >= threshold) {
@@ -187,6 +222,11 @@ export async function processAchievementsForMatch(matchId: string) {
         await awardBadgeIfNeeded(sql, { playerId: pid, groupId, badge });
       }
     }
+
+    const pj = primeiroJogoMap[pid];
+    if (pj === 'V' || pj === 'E' || pj === 'D') {
+      await awardBadgeIfNeeded(sql, { playerId: pid, groupId, badge: 'primeiro_jogo' });
+    }
   }
 
   if (monthMatches.length > 0) {
@@ -206,6 +246,18 @@ export async function processAchievementsForMatch(matchId: string) {
         if (monthMatchesAttended[pid] === monthTotalMatches && focusedPlayers.has(pid)) {
           await awardBadgeIfNeeded(sql, { playerId: pid, groupId, badge: 'perfect_attendance' });
         }
+      }
+    }
+  }
+
+  let maxYearGoals = 0;
+  for (const pid of Object.keys(yearGoals)) {
+    if (yearGoals[pid] > maxYearGoals) maxYearGoals = yearGoals[pid];
+  }
+  if (maxYearGoals > 0) {
+    for (const pid of Object.keys(yearGoals)) {
+      if (yearGoals[pid] === maxYearGoals && focusedPlayers.has(pid)) {
+        await awardBadgeIfNeeded(sql, { playerId: pid, groupId, badge: 'top_scorer_year' });
       }
     }
   }

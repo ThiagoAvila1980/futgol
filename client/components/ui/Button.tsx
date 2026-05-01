@@ -46,6 +46,14 @@ export interface ButtonProps
   rightIcon?: React.ReactNode;
 }
 
+/** Radix Slot requires exactly one element child; strip whitespace-only text from JSX formatting. */
+function slotChild(children: React.ReactNode): React.ReactNode {
+  const nodes = React.Children.toArray(children).filter(
+    (c) => !(typeof c === "string" && c.trim() === "")
+  );
+  return nodes.length === 1 ? nodes[0] : children;
+}
+
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
     {
@@ -62,9 +70,20 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref
   ) => {
-    const Comp = asChild ? Slot : "button";
+    if (asChild) {
+      return (
+        <Slot
+          className={cn(buttonVariants({ variant, size, className }))}
+          ref={ref}
+          {...props}
+        >
+          {slotChild(children)}
+        </Slot>
+      );
+    }
+
     return (
-      <Comp
+      <button
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         disabled={disabled || isLoading}
@@ -78,7 +97,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {!isLoading && rightIcon && (
           <span className="flex-shrink-0">{rightIcon}</span>
         )}
-      </Comp>
+      </button>
     );
   }
 );

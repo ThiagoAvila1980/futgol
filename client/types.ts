@@ -159,6 +159,8 @@ export interface Match {
   mvpVotes?: Record<string, string>; // voterId -> candidateId
   subMatches?: SubMatch[];
   playerPoints?: Record<string, MatchPlayerPoints>; // playerId -> points snapshot for this match
+  /** Primeiro sub-jogo da sessão: resultado por jogador (V vitória, E empate, D derrota) */
+  primeiroJogoStatus?: Record<string, 'V' | 'E' | 'D'>;
   isCanceled?: boolean;
 }
 

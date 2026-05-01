@@ -19,12 +19,10 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [react()],
     define: {
-      'process.env.API_KEY': JSON.stringify(process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || ''),
-      'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || ''),
       'process.env.API_BASE_URL': JSON.stringify(process.env.API_BASE_URL || env.API_BASE_URL || ''),
       'process.env.VERCEL': JSON.stringify(process.env.VERCEL || ''),
       'process.env.VERCEL_ENV': JSON.stringify(process.env.VERCEL_ENV || ''),
-      'process.env.VERCEL_URL': JSON.stringify(process.env.VERCEL_URL || '')
+      'process.env.VERCEL_URL': JSON.stringify(process.env.VERCEL_URL || ''),
     },
     resolve: {
       alias: {

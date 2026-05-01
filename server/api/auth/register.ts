@@ -1,6 +1,8 @@
 import { ready } from '../_db';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { getJwtSecret } from '../jwtSecret';
+import { setAuthCookie } from './cookie';
 
 export default async function (req: any, res: any) {
     if (req.method !== 'POST') {
@@ -77,8 +79,9 @@ export default async function (req: any, res: any) {
         `, [userId, cleanPhone, birthDate || null, favoriteTeam || null]);
     }
 
-    const secret = process.env.JWT_SECRET || 'dev-secret';
-    const token = jwt.sign({ sub: userId, email, role: userRole }, secret, { expiresIn: '7d' });
+    const secret = getJwtSecret();
+    const token = jwt.sign({ sub: userId, email, name, role: userRole }, secret, { expiresIn: '7d' });
+    setAuthCookie(res, token);
 
     const userObj = {
         id: userId,
@@ -90,5 +93,5 @@ export default async function (req: any, res: any) {
         avatar: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
     };
 
-    res.status(200).json({ access: token, user: userObj });
+    res.status(200).json({ user: userObj });
 }

@@ -1,5 +1,6 @@
 import { ready } from '../../api/_db';
 import { processAchievementsForMatch } from '../achievements/from_match';
+import { computePrimeiroJogoPorJogador } from './primeiro-jogo';
 
 function safeParseJson<T>(raw: any, fallback: T): T {
   try {
@@ -9,6 +10,13 @@ function safeParseJson<T>(raw: any, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+/** Evita `''` em colunas com FK — string vazia não é NULL e rebenta `REFERENCES`. */
+function optionalRefId(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s.length > 0 ? s : null;
 }
 
 function computePlayerPoints(input: {
@@ -97,6 +105,18 @@ export default async function (req: any, res: any) {
       ? body.playerPoints
       : computedPoints;
 
+    let primeiroJogoStatusJson: string | null = null;
+    if (body.finished) {
+      const pj = computePrimeiroJogoPorJogador({
+        subMatches,
+        teamA,
+        teamB,
+        scoreA: Number(body.scoreA ?? 0),
+        scoreB: Number(body.scoreB ?? 0),
+      });
+      primeiroJogoStatusJson = JSON.stringify(pj);
+    }
+
     let wasFinished = false;
     if (finalId) {
       const existing = await sql(`SELECT finished FROM matches WHERE id = $1`, [finalId]) as any[];
@@ -107,10 +127,10 @@ export default async function (req: any, res: any) {
 
     const payload = {
       id: finalId,
-      group_id: String(body.groupId || ''),
+      group_id: optionalRefId(body.groupId),
       date: String(body.date || ''),
       time: String(body.time || ''),
-      field_id: String(body.fieldId || ''),
+      field_id: optionalRefId(body.fieldId),
       confirmed_player_ids: JSON.stringify(body.confirmedPlayerIds || []),
       paid_player_ids: JSON.stringify(body.paidPlayerIds || []),
       arrived_player_ids: JSON.stringify(arrivedPlayerIds),
@@ -119,29 +139,47 @@ export default async function (req: any, res: any) {
       score_a: Number(body.scoreA ?? 0),
       score_b: Number(body.scoreB ?? 0),
       finished: body.finished ? 1 : 0,
-      mvp_id: body.mvpId ? String(body.mvpId) : null,
+      mvp_id:
+        body.mvpId != null && String(body.mvpId).trim() !== '' ? String(body.mvpId).trim() : null,
       sub_matches: JSON.stringify(subMatches),
-      player_points: JSON.stringify(playerPoints || {})
+      player_points: JSON.stringify(playerPoints || {}),
+      primeiro_jogo_status: primeiroJogoStatusJson,
     };
     let persistedId = finalId as string | undefined;
     if (payload.id == null) {
-      const rows = await sql(`INSERT INTO matches(group_id, date, time, field_id, confirmed_player_ids, paid_player_ids, arrived_player_ids, team_a, team_b, score_a, score_b, finished, mvp_id, sub_matches, player_points)
-               VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
-        [payload.group_id, payload.date, payload.time, payload.field_id, payload.confirmed_player_ids, payload.paid_player_ids, payload.arrived_player_ids, payload.team_a, payload.team_b, payload.score_a, payload.score_b, payload.finished, payload.mvp_id, payload.sub_matches, payload.player_points]
-      ) as any[];
-      const newId = rows[0]?.id;
-      persistedId = String(newId);
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ ...payload, id: String(newId) }));
+      try {
+        const rows = await sql(`INSERT INTO matches(group_id, date, time, field_id, confirmed_player_ids, paid_player_ids, arrived_player_ids, team_a, team_b, score_a, score_b, finished, mvp_id, sub_matches, player_points, primeiro_jogo_status)
+               VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
+          [payload.group_id, payload.date, payload.time, payload.field_id, payload.confirmed_player_ids, payload.paid_player_ids, payload.arrived_player_ids, payload.team_a, payload.team_b, payload.score_a, payload.score_b, payload.finished, payload.mvp_id, payload.sub_matches, payload.player_points, payload.primeiro_jogo_status]
+        ) as any[];
+        const newId = rows[0]?.id;
+        persistedId = String(newId);
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ ...payload, id: String(newId) }));
+      } catch (e) {
+        console.error('[matches PUT] INSERT', e);
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'Falha ao criar partida' }));
+        return;
+      }
     } else {
-      await sql(`INSERT INTO matches(id, group_id, date, time, field_id, confirmed_player_ids, paid_player_ids, arrived_player_ids, team_a, team_b, score_a, score_b, finished, mvp_id, sub_matches, player_points)
-               VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-               ON CONFLICT (id) DO UPDATE SET group_id=EXCLUDED.group_id, date=EXCLUDED.date, time=EXCLUDED.time, field_id=EXCLUDED.field_id, confirmed_player_ids=EXCLUDED.confirmed_player_ids, paid_player_ids=EXCLUDED.paid_player_ids, arrived_player_ids=EXCLUDED.arrived_player_ids, team_a=EXCLUDED.team_a, team_b=EXCLUDED.team_b, score_a=EXCLUDED.score_a, score_b=EXCLUDED.score_b, finished=EXCLUDED.finished, mvp_id=EXCLUDED.mvp_id, sub_matches=EXCLUDED.sub_matches, player_points=EXCLUDED.player_points`,
-        [payload.id, payload.group_id, payload.date, payload.time, payload.field_id, payload.confirmed_player_ids, payload.paid_player_ids, payload.arrived_player_ids, payload.team_a, payload.team_b, payload.score_a, payload.score_b, payload.finished, payload.mvp_id, payload.sub_matches, payload.player_points]
-      );
-      res.statusCode = 204;
-      res.end('');
+      try {
+        await sql(`INSERT INTO matches(id, group_id, date, time, field_id, confirmed_player_ids, paid_player_ids, arrived_player_ids, team_a, team_b, score_a, score_b, finished, mvp_id, sub_matches, player_points, primeiro_jogo_status)
+               VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+               ON CONFLICT (id) DO UPDATE SET group_id=COALESCE(EXCLUDED.group_id, matches.group_id), date=EXCLUDED.date, time=EXCLUDED.time, field_id=COALESCE(EXCLUDED.field_id, matches.field_id), confirmed_player_ids=EXCLUDED.confirmed_player_ids, paid_player_ids=EXCLUDED.paid_player_ids, arrived_player_ids=EXCLUDED.arrived_player_ids, team_a=EXCLUDED.team_a, team_b=EXCLUDED.team_b, score_a=EXCLUDED.score_a, score_b=EXCLUDED.score_b, finished=EXCLUDED.finished, mvp_id=EXCLUDED.mvp_id, sub_matches=EXCLUDED.sub_matches, player_points=EXCLUDED.player_points, primeiro_jogo_status=EXCLUDED.primeiro_jogo_status`,
+          [payload.id, payload.group_id, payload.date, payload.time, payload.field_id, payload.confirmed_player_ids, payload.paid_player_ids, payload.arrived_player_ids, payload.team_a, payload.team_b, payload.score_a, payload.score_b, payload.finished, payload.mvp_id, payload.sub_matches, payload.player_points, payload.primeiro_jogo_status]
+        );
+        res.statusCode = 204;
+        res.end('');
+      } catch (e) {
+        console.error('[matches PUT] UPSERT', finalId, e);
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'Falha ao guardar partida' }));
+        return;
+      }
     }
 
     if (payload.finished && !wasFinished && persistedId) {

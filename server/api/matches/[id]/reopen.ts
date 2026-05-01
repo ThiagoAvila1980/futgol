@@ -15,7 +15,7 @@ export default async function (req: any, res: any) {
     res.end('Not Found');
     return;
   }
-  await sql(`UPDATE matches SET finished = 0 WHERE id = $1`, [id]);
+  await sql(`UPDATE matches SET finished = 0, primeiro_jogo_status = NULL WHERE id = $1`, [id]);
   const m = rows[0];
   const data = {
     id: m.id,

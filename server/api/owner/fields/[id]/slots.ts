@@ -1,26 +1,12 @@
 import { ready } from '../../../_db';
-import jwt from 'jsonwebtoken';
+import type { AuthRequest } from '../../../middleware/auth';
 
-export default async function (req: any, res: any) {
+export default async function (req: AuthRequest, res: any) {
   const sql = await ready();
-
-  // Auth Check
-  const auth = String(req.headers['authorization'] || '');
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  if (!token) {
+  const userId = req.user?.id;
+  if (!userId) {
     res.statusCode = 401;
     res.end(JSON.stringify({ detail: 'Unauthorized' }));
-    return;
-  }
-  
-  let userId = '';
-  try {
-    const secret = process.env.JWT_SECRET || 'dev-secret';
-    const payload: any = jwt.verify(token, secret);
-    userId = String(payload.sub || '');
-  } catch {
-    res.statusCode = 401;
-    res.end(JSON.stringify({ detail: 'Invalid Token' }));
     return;
   }
 

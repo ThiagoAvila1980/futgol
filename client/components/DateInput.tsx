@@ -111,12 +111,12 @@ export const DateInput: React.FC<DateInputProps> = ({ value, onChange, className
         type="date"
         value={value || ''}
         onChange={onNativeChange}
-        className="absolute right-0 opacity-0 w-0 h-0"
+        className="absolute right-0 opacity-0 w-0 h-0 overflow-hidden"
         lang="pt-BR"
         min={min}
         max={max}
         tabIndex={-1}
-        aria-hidden="true"
+        aria-label="Abrir calendário para esta data"
       />
     </div>
   );

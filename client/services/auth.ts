@@ -1,11 +1,7 @@
-
-import { User, Position } from '../types';
-import api, { setToken } from './api';
+import { User } from '../types';
+import api from './api';
 
 const STORAGE_KEY = 'futgol_user_session';
-
-// Simula delay de API
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const authService = {
   getCurrentUser: async (): Promise<User | null> => {
@@ -22,8 +18,9 @@ export const authService = {
     } catch (e: any) {
       const msg = e?.message || '';
       if (msg.includes('HTTP 401') || msg.includes('HTTP 403')) {
-        try { localStorage.removeItem(STORAGE_KEY); } catch { }
-        try { localStorage.removeItem('futgol_jwt_token'); } catch { }
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+        } catch {}
         return null;
       }
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -35,8 +32,7 @@ export const authService = {
     if (!email || !password) throw new Error('Preencha todos os campos');
     try {
       const resp = await api.post('/api/auth/login/', { email, password });
-      const { user, access } = resp;
-      if (access) setToken(access);
+      const { user } = resp as { user: User };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
       return user as User;
     } catch (e: any) {
@@ -44,7 +40,9 @@ export const authService = {
       if (msg.includes('Credenciais inválidas') || msg.includes('HTTP 400')) {
         throw new Error('Email ou senha inválidos. Verifique os dados e tente novamente.');
       }
-      throw new Error(`Falha de conexão com o servidor (${msg || 'erro de rede'}). Verifique se o backend está acessível em :8000.`);
+      throw new Error(
+        `Falha de conexão com o servidor (${msg || 'erro de rede'}). Verifique se o backend está em execução (porta 3001 em desenvolvimento).`,
+      );
     }
   },
 
@@ -55,8 +53,7 @@ export const authService = {
   register: async (userData: Omit<User, 'id'> & { password?: string }): Promise<User> => {
     if (!userData.password) throw new Error('Senha obrigatória');
     const resp = await api.post('/api/auth/register/', userData);
-    const { user, access } = resp;
-    if (access) setToken(access);
+    const { user } = resp as { user: User };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
     return user as User;
   },
@@ -66,7 +63,7 @@ export const authService = {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
     return updatedUser;
   },
-  forgotPassword: async (email: string): Promise<any> => {
+  forgotPassword: async (email: string): Promise<unknown> => {
     const r = await api.post('/api/auth/password/reset/', { email });
     return r;
   },
@@ -74,11 +71,22 @@ export const authService = {
     await api.post('/api/auth/password/reset/confirm/', { uid, token, password });
   },
   logout: async (): Promise<void> => {
+    try {
+      await api.post('/api/auth/logout/', {});
+    } catch {
+      // limpa sessão local mesmo se o servidor falhar
+    }
     localStorage.removeItem(STORAGE_KEY);
-    try { localStorage.removeItem('futgol_jwt_token'); } catch { }
   },
-  lookupByPhone: async (phone: string): Promise<{ found: boolean; source?: string; profile?: any; groups?: Array<{ id: string; name: string }> }> => {
+  lookupByPhone: async (
+    phone: string,
+  ): Promise<{ found: boolean; source?: string; profile?: unknown; groups?: Array<{ id: string; name: string }> }> => {
     const r = await api.get(`/api/accounts/lookup_by_phone/?phone=${encodeURIComponent(phone)}`);
-    return r;
-  }
+    return r as {
+      found: boolean;
+      source?: string;
+      profile?: unknown;
+      groups?: Array<{ id: string; name: string }>;
+    };
+  },
 };

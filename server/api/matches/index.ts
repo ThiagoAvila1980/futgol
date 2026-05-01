@@ -60,7 +60,16 @@ export default async function (req: any, res: any) {
     mvpId: m.mvp_id || undefined,
     subMatches: m.sub_matches ? JSON.parse(m.sub_matches) : [],
     playerPoints: m.player_points ? JSON.parse(m.player_points) : undefined,
-    isCanceled: !!m.is_canceled
+    isCanceled: !!m.is_canceled,
+    primeiroJogoStatus: m.primeiro_jogo_status
+      ? (() => {
+          try {
+            return JSON.parse(m.primeiro_jogo_status);
+          } catch {
+            return undefined;
+          }
+        })()
+      : undefined,
   }));
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/json');

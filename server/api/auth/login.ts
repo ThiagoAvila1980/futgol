@@ -2,6 +2,8 @@ import jwt from 'jsonwebtoken';
 import { createHash } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { ready } from '../_db';
+import { getJwtSecret } from '../jwtSecret';
+import { setAuthCookie } from './cookie';
 
 export default async function (req: any, res: any) {
   if (req.method !== 'POST') {
@@ -59,7 +61,10 @@ export default async function (req: any, res: any) {
     usuario: !!row.usuario,
     role: row.role || 'user'
   };
-  const secret = process.env.JWT_SECRET || 'dev-secret';
-  const access = jwt.sign({ sub: user.id, email: user.email, name: user.name, role: user.role }, secret, { expiresIn: '7d' });
-  res.status(200).json({ user, access, refresh: '' });
+  const secret = getJwtSecret();
+  const access = jwt.sign({ sub: user.id, email: user.email, name: user.name, role: user.role }, secret, {
+    expiresIn: '7d',
+  });
+  setAuthCookie(res, access);
+  res.status(200).json({ user, refresh: '' });
 }

@@ -6,29 +6,19 @@ const resolveBaseUrl = () => {
     if (hostname === 'localhost' || hostname === '127.0.0.1') return '';
     return '';
   }
-  // Ambiente não-browser: fallback local
-  return 'http://localhost:8000';
+  return 'http://localhost:3001';
 };
 
 const BASE_URL = resolveBaseUrl().replace(/\/$/, '');
 
-const TOKEN_KEY = 'futgol_jwt_token';
-
-function getToken() {
-  try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; }
-}
-
-export function setToken(token: string) {
-  try { localStorage.setItem(TOKEN_KEY, token); } catch {}
-}
-
 async function request(path: string, options: RequestInit = {}) {
   const res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...(getToken() ? { 'Authorization': `Bearer ${getToken()}` } : {}),
+      ...(options.headers as Record<string, string> | undefined),
     },
-    ...options,
   });
   if (!res.ok) {
     const text = await res.text();
@@ -41,8 +31,9 @@ async function request(path: string, options: RequestInit = {}) {
 
 export const api = {
   get: (path: string) => request(path),
-  post: (path: string, body: any) => request(path, { method: 'POST', body: JSON.stringify(body) }),
-  put: (path: string, body: any) => request(path, { method: 'PUT', body: JSON.stringify(body) }),
+  post: (path: string, body?: unknown) =>
+    request(path, { method: 'POST', body: body !== undefined ? JSON.stringify(body) : undefined }),
+  put: (path: string, body: unknown) => request(path, { method: 'PUT', body: JSON.stringify(body) }),
   delete: (path: string) => request(path, { method: 'DELETE' }),
 };
 

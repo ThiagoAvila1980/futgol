@@ -1,9 +1,23 @@
 import { neon as neonDriver } from '@neondatabase/serverless';
 import { Pool } from 'pg';
 import { createHash } from 'crypto';
+import fs from 'node:fs';
+import path from 'path';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import * as schema from '../db/schema';
 
 let initialized = false;
-const DATABASE_URL = process.env.DATABASE_URL || 'postgres://postgres:19thi19@localhost:5432/db_futgol';
+const DATABASE_URL =
+  process.env.DATABASE_URL ||
+  (process.env.NODE_ENV === 'test'
+    ? 'postgres://postgres:postgres@127.0.0.1:5432/vitest_db_placeholder'
+    : '');
+if (!DATABASE_URL) {
+  throw new Error(
+    'DATABASE_URL must be set. Copy .env.example to .env and configure your PostgreSQL connection string.',
+  );
+}
 
 function isLocal(url: string) {
   try {
@@ -29,7 +43,97 @@ async function sql(text: string, params?: any[]) {
   throw new Error('DATABASE_URL is not configured');
 }
 
-export async function ensureSchema() {
+export const db = drizzle(pgPool, { schema });
+
+async function seedTeamsAndPositions() {
+  const teams = [
+    'América-MG', 'Athletico-PR', 'Atlético-GO', 'Atlético-MG', 'Avaí', 'Bahia', 'Botafogo', 'Bragantino',
+    'Ceará', 'Chapecoense', 'Corinthians', 'Coritiba', 'Criciúma', 'Cruzeiro', 'Cuiabá', 'Flamengo',
+    'Fluminense', 'Fortaleza', 'Goiás', 'Grêmio', 'Internacional', 'Juventude', 'Náutico', 'Palmeiras',
+    'Paraná', 'Paysandu', 'Ponte Preta', 'Santa Cruz', 'Santos', 'São Caetano', 'São Paulo', 'Sport',
+    'Vasco da Gama', 'Vitória', 'Guarani', 'Portuguesa',
+  ];
+  for (const t of teams) {
+    const teamId = createHash('md5').update(t).digest('hex');
+    await sql(`INSERT INTO teams(id, name) VALUES($1, $2) ON CONFLICT DO NOTHING`, [teamId, t]);
+  }
+  const positions = [
+    'Goleiro', 'Zagueiro', 'Meia', 'Atacante', 'Fixo', 'Ala Esquerda', 'Ala Direita', 'Pivô', 'Mesário', 'Juíz',
+    'Técnico', 'Auxiliar', 'Organizador',
+  ];
+  for (const p of positions) {
+    const posId = createHash('md5').update(p).digest('hex');
+    await sql(`INSERT INTO position_functions(id, name) VALUES($1, $2) ON CONFLICT DO NOTHING`, [posId, p]);
+  }
+}
+
+/** Hash e timestamp da primeira migração (igual a `drizzle-orm` / `readMigrationFiles`). */
+function readFirstMigrationMeta(): { hash: string; folderMillis: number } {
+  const migrationsFolder = path.join(process.cwd(), 'db', 'drizzle');
+  const journalPath = path.join(migrationsFolder, 'meta', '_journal.json');
+  const raw = fs.readFileSync(journalPath, 'utf8');
+  const journal = JSON.parse(raw) as { entries: Array<{ tag: string; when: number }> };
+  const first = journal.entries[0];
+  if (!first) {
+    throw new Error('db/drizzle/meta/_journal.json sem entradas');
+  }
+  const sqlPath = path.join(migrationsFolder, `${first.tag}.sql`);
+  const query = fs.readFileSync(sqlPath, 'utf8');
+  const hash = createHash('sha256').update(query).digest('hex');
+  return { hash, folderMillis: first.when };
+}
+
+/**
+ * Bases que já receberam o DDL legado (`CREATE IF NOT EXISTS`) têm tabelas como `achievements`,
+ * mas `drizzle.__drizzle_migrations` vazia. O Drizzle então tenta `CREATE TABLE achievements` de novo
+ * e falha com 42P07. Registramos a migração inicial como já aplicada quando detectamos essa situação.
+ */
+async function ensureDrizzleBaselineFromLegacyDb(): Promise<void> {
+  try {
+    await sql(`CREATE SCHEMA IF NOT EXISTS drizzle`);
+    await sql(`
+      CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
+        id SERIAL PRIMARY KEY,
+        hash text NOT NULL,
+        created_at bigint
+      )
+    `);
+  } catch {
+    return;
+  }
+
+  const legacyTables = await sql(`
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'achievements'
+    LIMIT 1
+  `);
+  if (!legacyTables.length) return;
+
+  let meta: { hash: string; folderMillis: number };
+  try {
+    meta = readFirstMigrationMeta();
+  } catch {
+    return;
+  }
+
+  const already = await sql(`SELECT 1 FROM drizzle.__drizzle_migrations WHERE hash = $1 LIMIT 1`, [
+    meta.hash,
+  ]);
+  if (already.length) return;
+
+  await sql(`INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)`, [
+    meta.hash,
+    meta.folderMillis,
+  ]);
+}
+
+async function runDrizzleMigrations() {
+  const migrationsFolder = path.join(process.cwd(), 'db', 'drizzle');
+  await migrate(db, { migrationsFolder });
+}
+
+/** DDL legado (CREATE IF NOT EXISTS) — usado só se a migração Drizzle falhar (bases antigas). */
+export async function legacyEnsureSchema() {
   // Ensure extensions for UUID generation
   try {
     await sql(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
@@ -201,6 +305,7 @@ export async function ensureSchema() {
   await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS mvp_votes TEXT`);
   await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS is_canceled INTEGER DEFAULT 0`);
   await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS player_points TEXT`);
+  await sql(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS primeiro_jogo_status TEXT`);
 
   // 6. Transactions
   await sql(`CREATE TABLE IF NOT EXISTS transactions(
@@ -244,24 +349,8 @@ export async function ensureSchema() {
 
   // Global Lookups
   await sql(`CREATE TABLE IF NOT EXISTS teams(id TEXT PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT NOT NULL UNIQUE); `);
-  const teams = [
-    'América-MG', 'Athletico-PR', 'Atlético-GO', 'Atlético-MG', 'Avaí', 'Bahia', 'Botafogo', 'Bragantino',
-    'Ceará', 'Chapecoense', 'Corinthians', 'Coritiba', 'Criciúma', 'Cruzeiro', 'Cuiabá', 'Flamengo',
-    'Fluminense', 'Fortaleza', 'Goiás', 'Grêmio', 'Internacional', 'Juventude', 'Náutico', 'Palmeiras',
-    'Paraná', 'Paysandu', 'Ponte Preta', 'Santa Cruz', 'Santos', 'São Caetano', 'São Paulo', 'Sport',
-    'Vasco da Gama', 'Vitória', 'Guarani', 'Portuguesa'
-  ];
-  for (const t of teams) {
-    const teamId = createHash('md5').update(t).digest('hex');
-    await sql(`INSERT INTO teams(id, name) VALUES($1, $2) ON CONFLICT DO NOTHING`, [teamId, t]);
-  }
-
   await sql(`CREATE TABLE IF NOT EXISTS position_functions(id TEXT PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT NOT NULL UNIQUE); `);
-  const positions = ['Goleiro', 'Zagueiro', 'Meia', 'Atacante', 'Fixo', 'Ala Esquerda', 'Ala Direita', 'Pivô', 'Mesário', 'Juíz', 'Técnico', 'Auxiliar', 'Organizador'];
-  for (const p of positions) {
-    const posId = createHash('md5').update(p).digest('hex');
-    await sql(`INSERT INTO position_functions(id, name) VALUES($1, $2) ON CONFLICT DO NOTHING`, [posId, p]);
-  }
+  await seedTeamsAndPositions();
 
   // Push Subscriptions
   await sql(`CREATE TABLE IF NOT EXISTS push_subscriptions(
@@ -314,6 +403,22 @@ export async function ensureSchema() {
   )`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_field_bookings_field ON field_bookings(field_id)`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_field_bookings_date ON field_bookings(date)`);
+}
+
+export async function ensureSchema() {
+  try {
+    await sql(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
+  } catch (e) {
+    console.warn('Could not ensure pgcrypto extension:', e);
+  }
+  try {
+    await ensureDrizzleBaselineFromLegacyDb();
+    await runDrizzleMigrations();
+    await seedTeamsAndPositions();
+  } catch (e) {
+    console.warn('[db] Drizzle migrate failed, using legacy DDL:', e);
+    await legacyEnsureSchema();
+  }
 }
 
 export async function ready() {

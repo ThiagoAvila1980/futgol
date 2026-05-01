@@ -1,24 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 import { ready } from '../_db';
-import jwt from 'jsonwebtoken';
+import type { AuthRequest } from '../middleware/auth';
 
-export default async function (req: any, res: any) {
+export default async function (req: AuthRequest, res: any) {
   await ready();
 
-  const auth = String(req.headers['authorization'] || '');
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  if (!token) {
+  if (!req.user?.id) {
     res.statusCode = 401;
     res.end(JSON.stringify({ detail: 'Unauthorized' }));
-    return;
-  }
-  try {
-    const secret = process.env.JWT_SECRET || 'dev-secret';
-    jwt.verify(token, secret);
-  } catch {
-    res.statusCode = 401;
-    res.end(JSON.stringify({ detail: 'Invalid Token' }));
     return;
   }
 

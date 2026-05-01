@@ -491,7 +491,10 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
     try {
       setIsSaving(true);
       setUpdatingPresenceFor(playerId);
-      const match = matches.find(m => m.id === matchId);
+      const match =
+        selectedMatch?.id === matchId
+          ? selectedMatch
+          : matches.find((m) => m.id === matchId);
       if (!match) return;
 
       const isConfirmed = match.confirmedPlayerIds.includes(playerId);
@@ -555,7 +558,10 @@ export const MatchScreen: React.FC<MatchScreenProps> = ({ players, fields, match
     try {
       setIsSaving(true);
       setUpdatingPaymentFor(playerId);
-      const match = matches.find(m => m.id === matchId);
+      const match =
+        selectedMatch?.id === matchId
+          ? selectedMatch
+          : matches.find((m) => m.id === matchId);
       const field = fields.find(f => f.id === match?.fieldId);
       if (!match || !field) return;
 

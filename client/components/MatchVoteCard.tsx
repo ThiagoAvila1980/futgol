@@ -35,18 +35,9 @@ export const MatchVoteCard: React.FC<MatchVoteCardProps> = ({ match, currentUser
     try {
       setIsLoading(true);
       const res = await fetch(`/api/matches/${match.id}/votes`, {
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          ...(typeof window !== 'undefined'
-            ? (() => {
-                try {
-                  const token = localStorage.getItem('futgol_jwt_token') || '';
-                  return token ? { Authorization: `Bearer ${token}` } : {};
-                } catch {
-                  return {};
-                }
-              })()
-            : {}),
         },
       });
       if (!res.ok) return;
@@ -77,20 +68,11 @@ export const MatchVoteCard: React.FC<MatchVoteCardProps> = ({ match, currentUser
       setIsSending(true);
       const res = await fetch(`/api/matches/${match.id}/vote`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          ...(typeof window !== 'undefined'
-            ? (() => {
-                try {
-                  const token = localStorage.getItem('futgol_jwt_token') || '';
-                  return token ? { Authorization: `Bearer ${token}` } : {};
-                } catch {
-                  return {};
-                }
-              })()
-            : {}),
         },
-        body: JSON.stringify({ voterId: myId, votedForId: selectedCandidateId })
+        body: JSON.stringify({ voterId: myId, votedForId: selectedCandidateId }),
       });
 
       if (res.ok) {

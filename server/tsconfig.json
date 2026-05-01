@@ -10,7 +10,9 @@
     "noEmit": false,
     "outDir": "./dist",
     "isolatedModules": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
   "include": ["**/*.ts", "**/*.js"],
   "exclude": ["node_modules", "dist"]

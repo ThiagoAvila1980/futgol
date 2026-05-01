@@ -113,7 +113,7 @@ export const seedDatabase = async () => {
 
 
 export const storage = {
-  seedDatabase, // Exportar para usar no App.tsx
+  seedDatabase,
 
   // Operações de Usuário
   users: {
@@ -241,8 +241,9 @@ export const storage = {
       return data as Match[];
     },
     save: async (match: Match): Promise<Match> => {
-      const res = await api.put(`/api/matches/${encodeURIComponent(match.id)}/`, match);
-      return res as Match;
+      await api.put(`/api/matches/${encodeURIComponent(match.id)}/`, match);
+      // PUT devolve 204 sem corpo; o cliente já tem o payload persistido.
+      return match;
     },
     delete: async (id: string): Promise<void> => {
       await api.delete(`/api/matches/${encodeURIComponent(id)}/`);

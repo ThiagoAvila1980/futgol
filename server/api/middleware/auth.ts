@@ -1,24 +1,25 @@
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
+import { AUTH_COOKIE_NAME } from '../auth/cookie';
+import { getJwtSecret } from '../jwtSecret';
 
 export interface AuthRequest extends Request {
   user?: { id: string; email: string; name: string; role: string };
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
+const JWT_SECRET = getJwtSecret();
 
 const PUBLIC_ROUTES = [
   '/api/health',
   '/api/auth/login',
   '/api/auth/register',
+  '/api/auth/logout',
   '/api/teams',
   '/api/positions',
   '/api/fields/search',
 ];
 
 function isPublicRoute(req: Request): boolean {
-  // When mounted with app.use('/api', ...), req.baseUrl is "/api" and req.path is "/auth/login"
-  // We rebuild the full path to compare with PUBLIC_ROUTES.
   const fullPath = `${req.baseUrl}${req.path}`.replace(/\/+$/, '');
   return PUBLIC_ROUTES.includes(fullPath);
 }
@@ -28,7 +29,12 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
   if (isPublicRoute(req)) return next();
 
   const auth = String(req.headers['authorization'] || '');
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  const fromCookie =
+    req.cookies && typeof req.cookies[AUTH_COOKIE_NAME] === 'string'
+      ? String(req.cookies[AUTH_COOKIE_NAME])
+      : '';
+  const token = fromCookie || bearer;
 
   if (!token) {
     return res.status(401).json({ error: 'Token de autenticação requerido' });

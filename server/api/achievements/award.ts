@@ -1,7 +1,6 @@
 import { ready } from '../_db';
 
-const BADGE_DEFINITIONS: Record<string, { title: string; description: string }> = {
-  first_match: { title: 'Primeira Partida', description: 'Participou da primeira partida' },
+export const BADGE_DEFINITIONS: Record<string, { title: string; description: string }> = {
   mvp_first: { title: 'Primeiro MVP', description: 'Eleito MVP pela primeira vez' },
   mvp_5: { title: 'Craque Frequente', description: 'Eleito MVP 5 vezes' },
   mvp_10: { title: 'Lenda do MVP', description: 'Eleito MVP 10 vezes' },
@@ -11,8 +10,13 @@ const BADGE_DEFINITIONS: Record<string, { title: string; description: string }> 
   streak_5: { title: 'Sequência de 5', description: '5 partidas consecutivas' },
   streak_10: { title: 'Máquina', description: '10 partidas consecutivas' },
   top_scorer_month: { title: 'Artilheiro do Mês', description: 'Maior número de gols no mês' },
+  top_scorer_year: { title: 'Artilheiro do Ano', description: 'Maior número de gols no ano' },
   perfect_attendance: { title: 'Pontualidade 10', description: 'Presente em todas as partidas do mês' },
-  group_founder: { title: 'Fundador', description: 'Criou o grupo' },
+  primeiro_jogo: {
+    title: 'Primeiro jogo',
+    description:
+      'Registrou o resultado do primeiro jogo em que entrou na sessão (V, E ou D). Os pontos (V=3, E=1, D=0) somam-se ao XP em todas as noites.',
+  },
 };
 
 export default async function (req: any, res: any) {

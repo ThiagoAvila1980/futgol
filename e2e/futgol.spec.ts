@@ -25,7 +25,7 @@ test.describe('Futgol E2E Tests', () => {
   test('should reject invalid login', async ({ page }) => {
     await page.goto('http://localhost:3000');
     const emailInput = page.getByPlaceholder(/email/i);
-    const passwordInput = page.getByPlaceholder(/senha/i);
+    const passwordInput = page.getByLabel(/senha/i);
 
     if (await emailInput.isVisible()) {
       await emailInput.fill('invalid@email.com');
@@ -47,5 +47,17 @@ test.describe('Futgol E2E Tests', () => {
   test('API health check', async ({ request }) => {
     const response = await request.get('http://localhost:3001/api/health');
     expect(response.ok()).toBeTruthy();
+  });
+
+  test('URL /groups sem sessão redireciona para a landing', async ({ page }) => {
+    await page.goto('http://localhost:3000/groups');
+    await page.waitForURL('http://localhost:3000/', { timeout: 5000 });
+    await expect(page).toHaveTitle(/Futgol/);
+  });
+
+  test('URL de grupo sem sessão redireciona para a landing', async ({ page }) => {
+    await page.goto('http://localhost:3000/g/grupo-inexistente/dashboard');
+    await page.waitForURL('http://localhost:3000/', { timeout: 5000 });
+    await expect(page).toHaveTitle(/Futgol/);
   });
 });
