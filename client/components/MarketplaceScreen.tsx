@@ -3,6 +3,7 @@ import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 import { Input } from './ui/Input';
+import { DatePicker } from './ui/date-picker';
 import { Modal } from './ui/Modal';
 import { User, Group } from '../types';
 import api from '../services/api';
@@ -214,15 +215,12 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ currentUse
               <option value="quadra">Quadra</option>
               <option value="profissional">Profissional</option>
             </select>
-            <div className="relative">
-              <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-navy-300" />
-              <Input
-                type="date"
-                value={availabilityDate}
-                onChange={(e) => setAvailabilityDate(e.target.value)}
-                className="pl-9 text-xs md:text-sm"
-              />
-            </div>
+            <DatePicker
+              value={availabilityDate}
+              onChange={setAvailabilityDate}
+              className="text-xs md:text-sm min-h-10 py-2"
+              placeholder="Data"
+            />
           </div>
         </div>
         <div className="flex md:flex-col gap-2 md:w-40">

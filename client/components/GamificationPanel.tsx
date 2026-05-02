@@ -2,6 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 import { Card } from './ui/Card';
 import { Badge } from './ui/Badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
+import { Label } from './ui/label';
+import { Skeleton } from './ui/Skeleton';
+import { Input } from './ui/Input';
 import api from '../services/api';
 import { cn } from '../lib/utils';
 import { StatsScreen } from './StatsScreen';
@@ -232,146 +237,143 @@ export const GamificationPanel: React.FC<GamificationPanelProps> = ({
   };
 
   if (loading) {
-    return <div className="text-center text-navy-500 py-8">Carregando ranking...</div>;
+    return (
+      <div className="flex flex-col gap-4 py-4">
+        <Skeleton className="h-10 w-full max-w-lg rounded-xl" />
+        <Skeleton className="h-36 w-full rounded-2xl" />
+        <Skeleton className="h-24 w-full rounded-2xl" />
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setTab('ranking')}
-          className={cn(
-            'px-2 py-2 rounded-lg text-sm font-medium transition-colors',
-            tab === 'ranking' ? 'bg-brand-600 text-white' : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
-          )}
-        >
-          🏆 Ranking
-        </button>
-        <button
-          onClick={() => setTab('badges')}
-          className={cn(
-            'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-            tab === 'badges' ? 'bg-brand-600 text-white' : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
-          )}
-        >
-          🎖️ Conquistas
-        </button>
-        <button
-          onClick={() => setTab('stats')}
-          className={cn(
-            'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-            tab === 'stats' ? 'bg-brand-600 text-white' : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
-          )}
-        >
-          📊 Estatísticas
-        </button>
-      </div>
+    <Tabs
+      value={tab}
+      onValueChange={(v) => setTab(v as 'ranking' | 'badges' | 'stats')}
+      className="w-full"
+    >
+      <TabsList className="mb-1 h-auto min-h-10 w-full justify-start gap-1 sm:w-auto">
+        <TabsTrigger value="ranking" className="gap-1.5 px-4">
+          <span aria-hidden>🏆</span>
+          Ranking
+        </TabsTrigger>
+        <TabsTrigger value="badges" className="gap-1.5 px-4">
+          <span aria-hidden>🎖️</span>
+          Conquistas
+        </TabsTrigger>
+        <TabsTrigger value="stats" className="gap-1.5 px-4">
+          <span aria-hidden>📊</span>
+          Estatísticas
+        </TabsTrigger>
+      </TabsList>
 
-      {tab === 'ranking' && (
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-3 mb-2">
-            <div className="flex gap-2">
-              <button
-                onClick={() => setRankingMode('points')}
-                className={cn(
-                  'px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  rankingMode === 'points' ? 'bg-brand-600 text-white' : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
-                )}
-              >
-                Pontos (Justo)
-              </button>
-              <button
-                onClick={() => setRankingMode('xp')}
-                className={cn(
-                  'px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  rankingMode === 'xp' ? 'bg-brand-600 text-white' : 'bg-navy-100 text-navy-600 hover:bg-navy-200'
-                )}
-              >
-                XP (Conquistas)
-              </button>
-            </div>
-          </div>
+      <TabsContent value="ranking" className="mt-4 space-y-4">
+        <Tabs
+          value={rankingMode}
+          onValueChange={(v) => setRankingMode(v as 'points' | 'xp')}
+        >
+          <TabsList className="h-auto min-h-10 w-full justify-start sm:w-auto">
+            <TabsTrigger value="points">Pontos (Justo)</TabsTrigger>
+            <TabsTrigger value="xp">XP (Conquistas)</TabsTrigger>
+          </TabsList>
 
-          {rankingMode === 'points' && (
-            <Card className="p-0 overflow-hidden border-navy-200 shadow-sm mb-2">
-              <button
-                type="button"
-                onClick={() => setFiltersExpanded((v) => !v)}
-                className={cn(
-                  'w-full flex items-center justify-between gap-3 px-4 py-3 text-left bg-navy-50/90 hover:bg-navy-100/90 transition-colors',
-                  filtersExpanded && 'border-b border-navy-100/80'
-                )}
-                aria-expanded={filtersExpanded}
-              >
-                <span className="font-bold text-sm text-navy-900 tracking-tight">Filtros</span>
-                <ChevronDown
-                  className={cn(
-                    'h-5 w-5 shrink-0 text-navy-500 transition-transform duration-200',
-                    filtersExpanded && 'rotate-180'
-                  )}
-                  aria-hidden
-                />
-              </button>
-              {filtersExpanded && (
-                <div className="px-4 py-4 flex flex-wrap items-center gap-4 bg-white">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-navy-500">De</span>
-                    <DateInput value={startDate} onChange={setStartDate} className="bg-white border border-navy-200 rounded-xl px-3 py-2 text-xs" />
+          <TabsContent value="points" className="mt-4 space-y-3">
+            <Card className="overflow-hidden border-navy-200 p-0 shadow-sm">
+              <Collapsible open={filtersExpanded} onOpenChange={setFiltersExpanded}>
+                <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 bg-navy-50/90 px-4 py-3 text-left transition-colors hover:bg-navy-100/90 data-[state=open]:border-b data-[state=open]:border-navy-100/80">
+                  <span className="text-sm font-bold tracking-tight text-navy-900">Filtros</span>
+                  <ChevronDown
+                    className={cn(
+                      'size-5 shrink-0 text-navy-500 transition-transform duration-200',
+                      filtersExpanded && 'rotate-180'
+                    )}
+                    aria-hidden
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="flex flex-wrap items-end gap-4 bg-white px-4 py-4">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="rank-start" className="normal-case tracking-normal">
+                        De
+                      </Label>
+                      <DateInput
+                        id="rank-start"
+                        value={startDate}
+                        onChange={setStartDate}
+                        className="min-w-[11rem]"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="rank-end" className="normal-case tracking-normal">
+                        Até
+                      </Label>
+                      <DateInput
+                        id="rank-end"
+                        value={endDate}
+                        onChange={setEndDate}
+                        className="min-w-[11rem]"
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-navy-500">Até</span>
-                    <DateInput value={endDate} onChange={setEndDate} className="bg-white border border-navy-200 rounded-xl px-3 py-2 text-xs" />
-                  </div>
-                </div>
-              )}
+                </CollapsibleContent>
+              </Collapsible>
             </Card>
-          )}
 
-          {rankingMode === 'points' ? (
-            pointsLoading ? (
-              <div className="text-center text-navy-500 py-8">Carregando pontos...</div>
+            {pointsLoading ? (
+              <div className="flex flex-col gap-2">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-20 w-full rounded-xl" />
+                ))}
+              </div>
             ) : (
               <>
                 {pointsRanking.map((entry) => {
-                  const p = players.find(pl => pl.id === entry.playerId);
+                  const p = players.find((pl) => pl.id === entry.playerId);
                   const name = p?.nickname || p?.name || entry.playerId;
-                  const avatar = (p as any)?.avatar || '';
+                  const avatar = (p as { avatar?: string })?.avatar || '';
                   return (
-                    <Card key={entry.playerId} className={cn(
-                      'p-3 flex items-center gap-3',
-                      entry.rank <= 3 && 'border-l-4',
-                      entry.rank === 1 && 'border-l-yellow-400 bg-yellow-50/50',
-                      entry.rank === 2 && 'border-l-gray-400 bg-gray-50/50',
-                      entry.rank === 3 && 'border-l-amber-700 bg-amber-50/30',
-                    )}>
-                      <div className={cn(
-                        'w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm',
-                        entry.rank === 1 ? 'bg-yellow-400 text-yellow-900' :
-                        entry.rank === 2 ? 'bg-gray-300 text-gray-700' :
-                        entry.rank === 3 ? 'bg-amber-600 text-white' :
-                        'bg-navy-100 text-navy-600'
-                      )}>
+                    <Card
+                      key={entry.playerId}
+                      className={cn(
+                        'flex items-center gap-3 p-3',
+                        entry.rank <= 3 && 'border-l-4',
+                        entry.rank === 1 && 'border-l-yellow-400 bg-yellow-50/50',
+                        entry.rank === 2 && 'border-l-gray-400 bg-gray-50/50',
+                        entry.rank === 3 && 'border-l-amber-700 bg-amber-50/30'
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-bold',
+                          entry.rank === 1
+                            ? 'bg-yellow-400 text-yellow-900'
+                            : entry.rank === 2
+                              ? 'bg-gray-300 text-gray-700'
+                              : entry.rank === 3
+                                ? 'bg-amber-600 text-white'
+                                : 'bg-navy-100 text-navy-600'
+                        )}
+                      >
                         {entry.rank}
                       </div>
 
-                      <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 font-bold overflow-hidden">
+                      <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-100 text-lg font-bold text-brand-700">
                         {avatar ? (
-                          <img src={avatar} alt="" className="w-full h-full object-cover" />
+                          <img src={avatar} alt="" className="size-full object-cover" />
                         ) : (
                           name.charAt(0)
                         )}
                       </div>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-navy-900 text-sm truncate">
-                          {name}
-                        </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-navy-900">{name}</div>
                         <div className="text-xs text-navy-500">
-                          {entry.matchesAttended} presença(s) • {entry.goals} gol(s) • {entry.assists} assist.
+                          {entry.matchesAttended} presença(s) • {entry.goals} gol(s) • {entry.assists}{' '}
+                          assist.
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 text-xs text-navy-500">
+                      <div className="flex shrink-0 items-center gap-3 text-xs text-navy-500">
                         <span className="font-bold text-navy-900">{entry.points} pts</span>
                         <span title="Presença">✅ {entry.matchesAttended}</span>
                         <span title="Gols">⚽ {entry.goals}</span>
@@ -382,90 +384,85 @@ export const GamificationPanel: React.FC<GamificationPanelProps> = ({
                 })}
 
                 {pointsRanking.length === 0 && (
-                  <div className="text-center text-navy-500 py-8">
-                    Nenhum dado de pontuação no período.
-                  </div>
+                  <p className="py-8 text-center text-navy-500">Nenhum dado de pontuação no período.</p>
                 )}
               </>
-            )
-          ) : xpLoading ? (
-            <div className="text-center text-navy-500 py-8">Carregando ranking XP...</div>
-          ) : (
-            <>
-              <Card className="p-4 border-navy-200 shadow-sm mb-2 bg-white">
-                <div className="flex flex-col gap-3">
-                  <p className="text-xs font-bold text-navy-500 uppercase tracking-wide">Filtros (somente XP)</p>
-                  <div className="flex flex-col lg:flex-row flex-wrap items-stretch lg:items-end gap-3">
-                    <label className="flex-1 min-w-[12rem] flex flex-col gap-1">
-                      <span className="text-xs font-bold text-navy-500">Buscar por nome ou apelido</span>
-                      <div className="relative">
-                        <Search
-                          className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-navy-400 pointer-events-none"
-                          aria-hidden
-                        />
-                        <input
-                          type="search"
-                          value={xpPlayerSearch}
-                          onChange={(e) => setXpPlayerSearch(e.target.value)}
-                          placeholder="Filtrar jogadores…"
-                          className="w-full pl-9 pr-3 py-2 text-sm border border-navy-200 rounded-xl bg-white placeholder:text-navy-400"
-                          autoComplete="off"
-                        />
-                      </div>
-                    </label>
-                    <div className="flex flex-wrap items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-navy-500">De</span>
-                        <DateInput
-                          value={xpStartDate}
-                          onChange={setXpStartDate}
-                          className="bg-white border border-navy-200 rounded-xl px-3 py-2 text-xs"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-navy-500">Até</span>
-                        <DateInput
-                          value={xpEndDate}
-                          onChange={setXpEndDate}
-                          className="bg-white border border-navy-200 rounded-xl px-3 py-2 text-xs"
-                        />
-                      </div>
-                    </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="xp" className="mt-4 space-y-3">
+            <Card className="border-navy-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-bold uppercase tracking-wide text-navy-500">Filtros (somente XP)</p>
+              <div className="mt-3 flex flex-col flex-wrap gap-4 lg:flex-row lg:items-end">
+                <div className="flex min-w-[12rem] flex-1 flex-col gap-2">
+                  <Label htmlFor="xp-search" className="normal-case tracking-normal">
+                    Buscar por nome ou apelido
+                  </Label>
+                  <div className="relative">
+                    <Search
+                      className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-navy-400"
+                      aria-hidden
+                    />
+                    <Input
+                      id="xp-search"
+                      type="search"
+                      value={xpPlayerSearch}
+                      onChange={(e) => setXpPlayerSearch(e.target.value)}
+                      placeholder="Filtrar jogadores…"
+                      autoComplete="off"
+                      className="pl-10"
+                    />
                   </div>
                 </div>
-              </Card>
+                <div className="flex flex-wrap items-end gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="xp-start" className="normal-case tracking-normal">
+                      De
+                    </Label>
+                    <DateInput
+                      id="xp-start"
+                      value={xpStartDate}
+                      onChange={setXpStartDate}
+                      className="min-w-[11rem]"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="xp-end" className="normal-case tracking-normal">
+                      Até
+                    </Label>
+                    <DateInput
+                      id="xp-end"
+                      value={xpEndDate}
+                      onChange={setXpEndDate}
+                      className="min-w-[11rem]"
+                    />
+                  </div>
+                </div>
+              </div>
+            </Card>
 
-              <Card className="p-0 overflow-hidden border-navy-200 shadow-sm mb-2">
-                <button
-                  type="button"
-                  onClick={() => setXpSortFilterExpanded((v) => !v)}
-                  className={cn(
-                    'w-full flex items-center justify-between gap-3 px-4 py-3 text-left bg-navy-50/90 hover:bg-navy-100/90 transition-colors',
-                    xpSortFilterExpanded && 'border-b border-navy-100/80'
-                  )}
-                  aria-expanded={xpSortFilterExpanded}
-                >
-                  <span className="font-bold text-sm text-navy-900 tracking-tight">
-                    Ordenar por conquista
-                  </span>
+            <Card className="overflow-hidden border-navy-200 p-0 shadow-sm">
+              <Collapsible open={xpSortFilterExpanded} onOpenChange={setXpSortFilterExpanded}>
+                <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 bg-navy-50/90 px-4 py-3 text-left transition-colors hover:bg-navy-100/90 data-[state=open]:border-b data-[state=open]:border-navy-100/80">
+                  <span className="text-sm font-bold tracking-tight text-navy-900">Ordenar por conquista</span>
                   <ChevronDown
                     className={cn(
-                      'h-5 w-5 shrink-0 text-navy-500 transition-transform duration-200',
+                      'size-5 shrink-0 text-navy-500 transition-transform duration-200',
                       xpSortFilterExpanded && 'rotate-180'
                     )}
                     aria-hidden
                   />
-                </button>
-                {xpSortFilterExpanded && (
-                  <div className="px-4 py-3 bg-white flex flex-wrap gap-2 items-center">
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="flex flex-wrap gap-2 bg-white px-4 py-3">
                     <button
                       type="button"
                       onClick={() => setXpSortBy(XP_SORT_TOTAL)}
                       className={cn(
-                        'inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold border transition-colors',
+                        'inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
                         xpSortBy === XP_SORT_TOTAL
-                          ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
-                          : 'bg-white text-navy-700 border-navy-200 hover:bg-navy-50'
+                          ? 'border-brand-600 bg-brand-600 text-white shadow-sm'
+                          : 'border-navy-200 bg-white text-navy-700 hover:bg-navy-50'
                       )}
                     >
                       XP total
@@ -477,13 +474,13 @@ export const GamificationPanel: React.FC<GamificationPanelProps> = ({
                         onClick={() => setXpSortBy(badgeId)}
                         title={BADGE_LABELS_PT[badgeId] ?? badgeId}
                         className={cn(
-                          'inline-flex items-center gap-1 rounded-full pl-2 pr-2.5 py-1.5 text-xs font-medium border transition-colors max-w-[12rem]',
+                          'inline-flex max-w-[12rem] items-center gap-1 rounded-full border py-1.5 pl-2 pr-2.5 text-xs font-medium transition-colors',
                           xpSortBy === badgeId
-                            ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
-                            : 'bg-white text-navy-700 border-navy-200 hover:bg-navy-50'
+                            ? 'border-brand-600 bg-brand-600 text-white shadow-sm'
+                            : 'border-navy-200 bg-white text-navy-700 hover:bg-navy-50'
                         )}
                       >
-                        <span className="text-base shrink-0" aria-hidden>
+                        <span className="shrink-0 text-base" aria-hidden>
                           {BADGE_ICONS[badgeId] ?? '🏅'}
                         </span>
                         <span className="truncate text-left leading-tight">
@@ -492,176 +489,192 @@ export const GamificationPanel: React.FC<GamificationPanelProps> = ({
                       </button>
                     ))}
                   </div>
-                )}
-              </Card>
+                </CollapsibleContent>
+              </Collapsible>
+            </Card>
 
-              {sortedXpLeaderboard.map((entry, index) => {
-                const rank = index + 1;
-                const pjPts = entry.primeiroJogoPoints ?? entry.xpBreakdown?.fromPrimeiroJogo ?? 0;
-                const earned = new Set(entry.earnedBadges ?? []);
-                return (
-                <Card
-                  key={entry.playerId}
+            {xpLoading ? (
+              <div className="flex flex-col gap-2">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-28 w-full rounded-xl" />
+                ))}
+              </div>
+            ) : (
+              <>
+                {sortedXpLeaderboard.map((entry, index) => {
+                  const rank = index + 1;
+                  const pjPts = entry.primeiroJogoPoints ?? entry.xpBreakdown?.fromPrimeiroJogo ?? 0;
+                  const earned = new Set(entry.earnedBadges ?? []);
+                  return (
+                    <Card
+                      key={entry.playerId}
+                      className={cn(
+                        'flex flex-row items-stretch gap-3 p-3',
+                        rank <= 3 && 'border-l-4',
+                        rank === 1 && 'border-l-yellow-400 bg-yellow-50/50',
+                        rank === 2 && 'border-l-gray-400 bg-gray-50/50',
+                        rank === 3 && 'border-l-amber-700 bg-amber-50/30'
+                      )}
+                    >
+                      <div className="flex min-w-0 flex-1 flex-col gap-3">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={cn(
+                              'flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-bold',
+                              rank === 1
+                                ? 'bg-yellow-400 text-yellow-900'
+                                : rank === 2
+                                  ? 'bg-gray-300 text-gray-700'
+                                  : rank === 3
+                                    ? 'bg-amber-600 text-white'
+                                    : 'bg-navy-100 text-navy-600'
+                            )}
+                          >
+                            {rank}
+                          </div>
+                          <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-100 text-lg font-bold text-brand-700">
+                            {entry.avatar ? (
+                              <img src={entry.avatar} alt="" className="size-full object-cover" />
+                            ) : (
+                              (entry.nickname || entry.name).charAt(0)
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium text-navy-900">
+                              {entry.nickname || entry.name}
+                            </div>
+                            <div className="text-xs text-navy-500">
+                              Nível {entry.level} —{' '}
+                              {LEVEL_TITLES[Math.min(entry.level, LEVEL_TITLES.length - 1)]}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div
+                          className="flex flex-wrap justify-start gap-x-2 gap-y-3"
+                          title="Ícone colorido quando há XP dessa conquista; número = pontos (15 por medalha; 1º jogo inclui noites V/E/D + medalha obtida)"
+                        >
+                          {ALL_BADGE_IDS_ORDERED.map((badgeId) => {
+                            const has = earned.has(badgeId);
+                            const ptsBelow =
+                              badgeId === 'primeiro_jogo'
+                                ? pjPts + (has ? 15 : 0)
+                                : has
+                                  ? 15
+                                  : 0;
+                            const hasPoints = ptsBelow > 0;
+                            return (
+                              <div key={badgeId} className="flex w-[2.75rem] shrink-0 flex-col items-center gap-0.5">
+                                <span
+                                  className={cn(
+                                    'inline-flex size-9 items-center justify-center rounded-lg border text-lg leading-none transition-colors',
+                                    hasPoints
+                                      ? 'border-brand-300 bg-brand-50/90 opacity-100'
+                                      : 'border-navy-100 bg-navy-50/80 opacity-45 grayscale'
+                                  )}
+                                  title={`${BADGE_LABELS_PT[badgeId] ?? badgeId}${
+                                    hasPoints ? ` — ${ptsBelow} XP` : ' — sem pontos ainda'
+                                  }`}
+                                >
+                                  {BADGE_ICONS[badgeId] ?? '🏅'}
+                                </span>
+                                <span
+                                  className={cn(
+                                    'text-[10px] font-semibold leading-none tabular-nums',
+                                    hasPoints ? 'text-brand-700' : 'text-navy-400'
+                                  )}
+                                >
+                                  {ptsBelow}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="flex min-h-[4.5rem] min-w-[4.25rem] shrink-0 flex-col items-center justify-center self-center border-l border-navy-100/90 px-2">
+                        <span className="text-xl font-black leading-none tabular-nums text-navy-900">
+                          {entry.xp}
+                        </span>
+                        <span className="mt-1 text-[10px] font-bold uppercase tracking-wider text-navy-500">
+                          XP
+                        </span>
+                      </div>
+                    </Card>
+                  );
+                })}
+
+                {sortedXpLeaderboard.length === 0 && (
+                  <p className="py-8 text-center text-navy-500">
+                    {leaderboard.length === 0
+                      ? 'Nenhum jogador no ranking neste período.'
+                      : 'Nenhum jogador corresponde à busca.'}
+                  </p>
+                )}
+              </>
+            )}
+          </TabsContent>
+        </Tabs>
+      </TabsContent>
+
+      <TabsContent value="badges" className="mt-4 space-y-6">
+        {achievements.length > 0 ? (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            {achievements.map((ach) => (
+              <Card key={ach.id} className="p-4 text-center">
+                <div className="mb-2 text-3xl">{BADGE_ICONS[ach.badge] || '🏅'}</div>
+                <h4 className="text-sm font-bold text-navy-900">{ach.title}</h4>
+                <p className="mt-1 text-xs text-navy-500">{ach.description}</p>
+                <Badge variant="secondary" className="mt-2 text-[10px]">
+                  {new Date(ach.awarded_at).toLocaleDateString('pt-BR')}
+                </Badge>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="py-8 text-center text-navy-500">
+            <div className="mb-3 text-4xl">🎯</div>
+            <p className="font-medium">Nenhuma conquista ainda</p>
+            <p className="mt-1 text-sm">Continue jogando para desbloquear conquistas!</p>
+          </div>
+        )}
+
+        <div>
+          <h4 className="mb-3 font-bold text-navy-900">Conquistas disponíveis</h4>
+          <div className="grid grid-cols-4 gap-2 md:grid-cols-6">
+            {Object.entries(BADGE_ICONS).map(([key, icon]) => {
+              const earned = achievements.some((a) => a.badge === key);
+              return (
+                <div
+                  key={key}
                   className={cn(
-                    'p-3 flex flex-row gap-3 items-stretch',
-                    rank <= 3 && 'border-l-4',
-                    rank === 1 && 'border-l-yellow-400 bg-yellow-50/50',
-                    rank === 2 && 'border-l-gray-400 bg-gray-50/50',
-                    rank === 3 && 'border-l-amber-700 bg-amber-50/30',
+                    'rounded-lg border p-3 text-center',
+                    earned ? 'border-brand-200 bg-brand-50' : 'border-navy-100 bg-navy-50'
                   )}
                 >
-                  <div className="flex-1 min-w-0 flex flex-col gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        'w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0',
-                        rank === 1 ? 'bg-yellow-400 text-yellow-900' :
-                        rank === 2 ? 'bg-gray-300 text-gray-700' :
-                        rank === 3 ? 'bg-amber-600 text-white' :
-                        'bg-navy-100 text-navy-600'
-                      )}>
-                        {rank}
-                      </div>
-                      <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 font-bold overflow-hidden shrink-0">
-                        {entry.avatar ? (
-                          <img src={entry.avatar} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          (entry.nickname || entry.name).charAt(0)
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-navy-900 text-sm truncate">
-                          {entry.nickname || entry.name}
-                        </div>
-                        <div className="text-xs text-navy-500">
-                          Nível {entry.level} — {LEVEL_TITLES[Math.min(entry.level, LEVEL_TITLES.length - 1)]}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div
-                      className="flex flex-wrap gap-x-2 gap-y-3 justify-start"
-                      title="Ícone colorido quando há XP dessa conquista; número = pontos (15 por medalha; 1º jogo inclui noites V/E/D + medalha obtida)"
-                    >
-                      {ALL_BADGE_IDS_ORDERED.map((badgeId) => {
-                        const has = earned.has(badgeId);
-                        const ptsBelow =
-                          badgeId === 'primeiro_jogo'
-                            ? pjPts + (has ? 15 : 0)
-                            : has
-                              ? 15
-                              : 0;
-                        const hasPoints = ptsBelow > 0;
-                        return (
-                          <div
-                            key={badgeId}
-                            className="flex flex-col items-center gap-0.5 w-[2.75rem] shrink-0"
-                          >
-                            <span
-                              className={cn(
-                                'inline-flex items-center justify-center w-9 h-9 rounded-lg border text-lg leading-none transition-colors',
-                                hasPoints
-                                  ? 'border-brand-300 bg-brand-50/90 opacity-100'
-                                  : 'border-navy-100 bg-navy-50/80 opacity-45 grayscale'
-                              )}
-                              title={`${BADGE_LABELS_PT[badgeId] ?? badgeId}${
-                                hasPoints ? ` — ${ptsBelow} XP` : ' — sem pontos ainda'
-                              }`}
-                            >
-                              {BADGE_ICONS[badgeId] ?? '🏅'}
-                            </span>
-                            <span
-                              className={cn(
-                                'text-[10px] font-semibold tabular-nums leading-none',
-                                hasPoints ? 'text-brand-700' : 'text-navy-400'
-                              )}
-                            >
-                              {ptsBelow}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
+                  <div className="text-2xl">{icon}</div>
+                  <div className="mt-1 text-[10px] font-medium text-navy-600">
+                    {BADGE_LABELS_PT[key] || key.replace(/_/g, ' ')}
                   </div>
-
-                  <div className="shrink-0 flex flex-col items-center justify-center self-center px-2 border-l border-navy-100/90 min-h-[4.5rem] min-w-[4.25rem]">
-                    <span className="text-xl font-black tabular-nums text-navy-900 leading-none">
-                      {entry.xp}
-                    </span>
-                    <span className="text-[10px] font-bold text-navy-500 uppercase tracking-wider mt-1">
-                      XP
-                    </span>
-                  </div>
-                </Card>
-              );
-              })}
-
-              {sortedXpLeaderboard.length === 0 && (
-                <div className="text-center text-navy-500 py-8">
-                  {leaderboard.length === 0
-                    ? 'Nenhum jogador no ranking neste período.'
-                    : 'Nenhum jogador corresponde à busca.'}
+                  {earned && <span className="text-[10px] font-bold text-brand-600">✓</span>}
                 </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      {tab === 'badges' && (
-        <div className="space-y-3">
-          {achievements.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {achievements.map((ach) => (
-                <Card key={ach.id} className="p-4 text-center">
-                  <div className="text-3xl mb-2">{BADGE_ICONS[ach.badge] || '🏅'}</div>
-                  <h4 className="font-bold text-navy-900 text-sm">{ach.title}</h4>
-                  <p className="text-xs text-navy-500 mt-1">{ach.description}</p>
-                  <Badge variant="secondary" className="mt-2 text-[10px]">
-                    {new Date(ach.awarded_at).toLocaleDateString('pt-BR')}
-                  </Badge>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center text-navy-500 py-8">
-              <div className="text-4xl mb-3">🎯</div>
-              <p className="font-medium">Nenhuma conquista ainda</p>
-              <p className="text-sm mt-1">Continue jogando para desbloquear conquistas!</p>
-            </div>
-          )}
-
-          <div className="mt-6">
-            <h4 className="font-bold text-navy-900 mb-3">Conquistas Disponíveis</h4>
-            <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-              {Object.entries(BADGE_ICONS).map(([key, icon]) => {
-                const earned = achievements.some(a => a.badge === key);
-                return (
-                  <div key={key} className={cn(
-                    'p-3 rounded-lg border text-center',
-                    earned ? 'bg-brand-50 border-brand-200' : 'bg-navy-50 border-navy-100'
-                  )}>
-                    <div className="text-2xl">{icon}</div>
-                    <div className="text-[10px] font-medium mt-1 text-navy-600">
-                      {BADGE_LABELS_PT[key] || key.replace(/_/g, ' ')}
-                    </div>
-                    {earned && <span className="text-[10px] text-brand-600 font-bold">✓</span>}
-                  </div>
-                );
-              })}
-            </div>
+              );
+            })}
           </div>
         </div>
-      )}
+      </TabsContent>
 
-      {tab === 'stats' && (
-        <div className="mt-2">
-          <StatsScreen
-            players={players}
-            matches={matches}
-            activeGroup={activeGroup}
-          />
-        </div>
-      )}
-    </div>
+      <TabsContent value="stats" className="mt-4">
+        <StatsScreen
+          players={players}
+          matches={matches}
+          activeGroup={activeGroup}
+          startDate={startDate}
+          endDate={endDate}
+          onStartDateChange={setStartDate}
+          onEndDateChange={setEndDate}
+        />
+      </TabsContent>
+    </Tabs>
   );
 };

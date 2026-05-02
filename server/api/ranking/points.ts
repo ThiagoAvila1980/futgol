@@ -106,9 +106,10 @@ export default async function (req: any, res: any) {
   const agg: Record<string, { points: number; goals: number; assists: number; matchesAttended: number; matchesCounted: number }> = {};
 
   for (const m of rows) {
-    const pointsMap = m.player_points
-      ? safeJson<Record<string, any>>(m.player_points, {})
-      : computePlayerPointsFromMatch(m);
+    const parsed = m.player_points ? safeJson<Record<string, any>>(m.player_points, {}) : {};
+    /** Snapshot vazio ou ausente: recalcular a partir de sub_matches (igual às estatísticas no cliente). */
+    const pointsMap =
+      Object.keys(parsed).length > 0 ? parsed : computePlayerPointsFromMatch(m);
 
     for (const [playerId, p] of Object.entries(pointsMap || {})) {
       if (!playerId) continue;

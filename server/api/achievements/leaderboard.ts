@@ -199,9 +199,9 @@ async function buildPeriodLeaderboard(sql: any, groupId: string, start: string, 
   const primeiroJogoXpByPlayer: Record<string, number> = {};
 
   for (const m of matchRows) {
-    const pointsMap = m.player_points
-      ? safeJson<Record<string, any>>(m.player_points, {})
-      : computePlayerPointsFromMatch(m);
+    const parsed = m.player_points ? safeJson<Record<string, any>>(m.player_points, {}) : {};
+    const pointsMap =
+      Object.keys(parsed).length > 0 ? parsed : computePlayerPointsFromMatch(m);
 
     for (const [playerId, p] of Object.entries(pointsMap || {})) {
       if (!playerId) continue;

@@ -3,28 +3,33 @@ import { Player, Match, Position, Group } from '../types';
 import { Card } from './ui/Card';
 import { Input } from './ui/Input';
 import DateInput from './DateInput';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
+import { Label } from './ui/label';
 import { cn } from '@/lib/utils';
-import { Search, ChevronDown, Trophy } from 'lucide-react';
+import { Search, ChevronDown } from 'lucide-react';
 
 interface StatsScreenProps {
     players: Player[];
     matches: Match[];
     activeGroup: Group;
+    /** Mesmo intervalo do ranking “Pontos (Justo)” nesta página */
+    startDate: string;
+    endDate: string;
+    onStartDateChange: (v: string) => void;
+    onEndDateChange: (v: string) => void;
 }
 
 type SortBy = 'matches' | 'goals' | 'assists' | 'rating' | 'mvps';
 
-export const StatsScreen: React.FC<StatsScreenProps> = ({ players, matches, activeGroup }) => {
-    const [startDate, setStartDate] = useState(() => {
-        // Default to first day of current month
-        const now = new Date();
-        const y = now.getFullYear();
-        const m = String(now.getMonth() + 1).padStart(2, '0');
-        return `${y}-${m}-01`;
-    });
-    const [endDate, setEndDate] = useState(() => {
-        return new Date().toISOString().split('T')[0];
-    });
+export const StatsScreen: React.FC<StatsScreenProps> = ({
+    players,
+    matches,
+    activeGroup: _activeGroup,
+    startDate,
+    endDate,
+    onStartDateChange,
+    onEndDateChange,
+}) => {
     const [sortBy, setSortBy] = useState<SortBy | 'mvps'>('goals');
     const [searchTerm, setSearchTerm] = useState('');
     const [filtersExpanded, setFiltersExpanded] = useState(false);
@@ -38,6 +43,7 @@ export const StatsScreen: React.FC<StatsScreenProps> = ({ players, matches, acti
 
         matches.forEach(m => {
             if (!m.finished) return;
+            if (m.isCanceled) return;
             if (startDate && m.date < startDate) return;
             if (endDate && m.date > endDate) return;
 
@@ -66,18 +72,27 @@ export const StatsScreen: React.FC<StatsScreenProps> = ({ players, matches, acti
                 stats[m.mvpId].mvps += 1;
             }
 
-            m.subMatches?.forEach(sm => {
-                if (sm.goals) {
-                    Object.entries(sm.goals).forEach(([pid, count]) => {
-                        if (stats[pid]) stats[pid].goals += (count as number);
-                    });
-                }
-                if (sm.assists) {
-                    Object.entries(sm.assists).forEach(([pid, count]) => {
-                        if (stats[pid]) stats[pid].assists += (count as number);
-                    });
-                }
-            });
+            const snapshot = m.playerPoints && Object.keys(m.playerPoints).length > 0 ? m.playerPoints : null;
+            if (snapshot) {
+                Object.entries(snapshot).forEach(([pid, pp]) => {
+                    if (!stats[pid]) return;
+                    stats[pid].goals += Number(pp?.goals || 0) || 0;
+                    stats[pid].assists += Number(pp?.assists || 0) || 0;
+                });
+            } else {
+                m.subMatches?.forEach(sm => {
+                    if (sm.goals) {
+                        Object.entries(sm.goals).forEach(([pid, count]) => {
+                            if (stats[pid]) stats[pid].goals += (count as number);
+                        });
+                    }
+                    if (sm.assists) {
+                        Object.entries(sm.assists).forEach(([pid, count]) => {
+                            if (stats[pid]) stats[pid].assists += (count as number);
+                        });
+                    }
+                });
+            }
         });
 
         return Object.entries(stats)
@@ -108,77 +123,82 @@ export const StatsScreen: React.FC<StatsScreenProps> = ({ players, matches, acti
 
     return (
         <div className="space-y-4 animate-fade-in pb-6">
-            {/* Filtros (recolhido por padrão) */}
-            <Card className="p-0 overflow-hidden border-navy-200 shadow-sm border-b-4 border-b-brand-500">
-                <button
-                    type="button"
-                    onClick={() => setFiltersExpanded((v) => !v)}
-                    className={cn(
-                        'w-full flex items-center justify-between gap-3 px-4 py-3 text-left bg-navy-50/90 hover:bg-navy-100/90 transition-colors',
-                        filtersExpanded && 'border-b border-navy-100/80'
-                    )}
-                    aria-expanded={filtersExpanded}
-                >
-                    <span className="font-bold text-sm text-navy-900 tracking-tight">Filtros</span>
-                    <ChevronDown
-                        className={cn(
-                            'h-5 w-5 shrink-0 text-navy-500 transition-transform duration-200',
-                            filtersExpanded && 'rotate-180'
-                        )}
-                        aria-hidden
-                    />
-                </button>
-                {filtersExpanded && (
-                    <div className="p-6 pt-5 bg-white">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                            <div className="space-y-2">
-                                <label className="text-xs font-black text-navy-400 uppercase tracking-[0.2em] ml-1">Data Inicial</label>
-                                <DateInput
-                                    value={startDate}
-                                    onChange={setStartDate}
-                                    className="w-full bg-navy-50/50 border-navy-100 hover:border-brand-300 focus:border-brand-500 transition-all rounded-xl"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-xs font-black text-navy-400 uppercase tracking-[0.2em] ml-1">Data Final</label>
-                                <DateInput
-                                    value={endDate}
-                                    onChange={setEndDate}
-                                    className="w-full bg-navy-50/50 border-navy-100 hover:border-brand-300 focus:border-brand-500 transition-all rounded-xl"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-xs font-black text-navy-400 uppercase tracking-[0.2em] ml-1">Ordenar Por</label>
-                                <div className="relative">
-                                    <select
-                                        value={sortBy}
-                                        onChange={(e) => setSortBy(e.target.value as SortBy)}
-                                        className="w-full bg-navy-50/50 border border-navy-100 rounded-xl px-4 py-3 text-navy-900 font-bold focus:outline-none focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 transition-all appearance-none cursor-pointer hover:bg-white"
-                                    >
-                                        <option value="goals">⚽ Gols</option>
-                                        <option value="assists">👟 Assistências</option>
-                                        <option value="matches">📅 Jogos</option>
-                                        <option value="mvps">🏆 Craque da Galera</option>
-                                        <option value="rating">⭐️ Habilidade</option>
-                                    </select>
-                                    <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-navy-400">
-                                        <ChevronDown className="h-4 w-4" />
+            <Card className="overflow-hidden border-b-4 border-b-brand-500 border-navy-200 p-0 shadow-sm">
+                <Collapsible open={filtersExpanded} onOpenChange={setFiltersExpanded}>
+                    <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 bg-navy-50/90 px-4 py-3 text-left transition-colors hover:bg-navy-100/90 data-[state=open]:border-b data-[state=open]:border-navy-100/80">
+                        <span className="text-sm font-bold tracking-tight text-navy-900">Filtros</span>
+                        <ChevronDown
+                            className={cn(
+                                'size-5 shrink-0 text-navy-500 transition-transform duration-200',
+                                filtersExpanded && 'rotate-180'
+                            )}
+                            aria-hidden
+                        />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                        <div className="bg-white p-6 pt-5">
+                            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+                                <div className="flex flex-col gap-2">
+                                    <Label htmlFor="stats-start" className="ml-1">
+                                        Data inicial
+                                    </Label>
+                                    <DateInput
+                                        id="stats-start"
+                                        value={startDate}
+                                        onChange={onStartDateChange}
+                                        className="w-full"
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <Label htmlFor="stats-end" className="ml-1">
+                                        Data final
+                                    </Label>
+                                    <DateInput
+                                        id="stats-end"
+                                        value={endDate}
+                                        onChange={onEndDateChange}
+                                        className="w-full"
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <Label htmlFor="stats-sort" className="ml-1">
+                                        Ordenar por
+                                    </Label>
+                                    <div className="relative">
+                                        <select
+                                            id="stats-sort"
+                                            value={sortBy}
+                                            onChange={(e) => setSortBy(e.target.value as SortBy)}
+                                            className="w-full cursor-pointer appearance-none rounded-xl border border-navy-100 bg-navy-50/50 px-4 py-3 font-bold text-navy-900 transition-all hover:bg-white focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/10"
+                                        >
+                                            <option value="goals">⚽ Gols</option>
+                                            <option value="assists">👟 Assistências</option>
+                                            <option value="matches">📅 Jogos</option>
+                                            <option value="mvps">🏆 Craque da Galera</option>
+                                            <option value="rating">⭐️ Habilidade</option>
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-navy-400">
+                                            <ChevronDown className="size-4" />
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-xs font-black text-navy-400 uppercase tracking-[0.2em] ml-1">Buscar</label>
-                                <Input
-                                    placeholder="Nome ou apelido..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="bg-navy-50/50 border-navy-100 hover:border-brand-300 focus:border-brand-500 transition-all rounded-xl"
-                                    icon={<Search className="h-4 w-4 text-navy-300" />}
-                                />
+                                <div className="flex flex-col gap-2">
+                                    <Label htmlFor="stats-search" className="ml-1">
+                                        Buscar
+                                    </Label>
+                                    <Input
+                                        id="stats-search"
+                                        placeholder="Nome ou apelido..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="border-navy-100 bg-navy-50/50 hover:border-brand-300 focus:border-brand-500"
+                                        icon={<Search className="h-4 w-4 text-navy-300" />}
+                                    />
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    </CollapsibleContent>
+                </Collapsible>
             </Card>
 
             {/* Podium Section - Grande Campeão */}
@@ -301,8 +321,8 @@ export const StatsScreen: React.FC<StatsScreenProps> = ({ players, matches, acti
                                         )}
                                     </div>
                                 </div>
-                                </div>
-                            <div className="w-full border-t border-navy-100 pt-3 pl-12 md:pl-0 md:border-t-0 md:pt-0 md:w-auto md:shrink-0">
+                            </div>
+                            <div className="w-full border-t border-navy-100 pt-3 pl-12 md:w-auto md:shrink-0 md:border-t-0 md:pt-0">
                                 {statsRow}
                             </div>
                         </Card>

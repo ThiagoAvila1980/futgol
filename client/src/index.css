@@ -1,5 +1,19 @@
 @import "tailwindcss";
+@import "react-day-picker/style.css";
 @config "../tailwind.config.js";
+
+/* Tema do calendário (react-day-picker) */
+.rdp-root {
+  --rdp-accent-color: #16a34a;
+  --rdp-accent-background-color: #dcfce7;
+  --rdp-day-height: 2.25rem;
+  --rdp-day-width: 2.25rem;
+}
+
+/* Select nativo do caption em modo dropdown: deve permanecer invisível (só área clicável). */
+.rdp-root .rdp-dropdown_root .rdp-dropdown {
+  opacity: 0 !important;
+}
 
 @layer base {
   :root {
