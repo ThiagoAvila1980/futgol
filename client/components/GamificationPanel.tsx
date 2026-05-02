@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Search } from 'lucide-react';
 import { Card } from './ui/Card';
 import { Badge } from './ui/Badge';
 import api from '../services/api';
@@ -125,9 +125,11 @@ export const GamificationPanel: React.FC<GamificationPanelProps> = ({
   const [pointsRanking, setPointsRanking] = useState<PointsRankingEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [pointsLoading, setPointsLoading] = useState(false);
+  const [xpLoading, setXpLoading] = useState(false);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [xpSortBy, setXpSortBy] = useState<string>(XP_SORT_TOTAL);
   const [xpSortFilterExpanded, setXpSortFilterExpanded] = useState(false);
+  const [xpPlayerSearch, setXpPlayerSearch] = useState('');
 
   const [startDate, setStartDate] = useState(() => {
     const now = new Date();
@@ -136,6 +138,14 @@ export const GamificationPanel: React.FC<GamificationPanelProps> = ({
     return `${y}-${m}-01`;
   });
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+  const [xpStartDate, setXpStartDate] = useState(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}-01`;
+  });
+  const [xpEndDate, setXpEndDate] = useState(() => new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     loadData();
@@ -148,16 +158,18 @@ export const GamificationPanel: React.FC<GamificationPanelProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, rankingMode, groupId, startDate, endDate]);
 
+  useEffect(() => {
+    if (tab !== 'ranking' || rankingMode !== 'xp') return;
+    loadXpLeaderboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, rankingMode, groupId, xpStartDate, xpEndDate]);
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const [lb, ach] = await Promise.all([
-        api.get(`/api/achievements/leaderboard?groupId=${groupId}`),
-        playerId
-          ? api.get(`/api/achievements?playerId=${playerId}&groupId=${groupId}`)
-          : Promise.resolve([]),
-      ]);
-      setLeaderboard(lb);
+      const ach = playerId
+        ? await api.get(`/api/achievements?playerId=${playerId}&groupId=${groupId}`)
+        : [];
       setAchievements(ach);
     } catch (error) {
       console.error('Gamification load error:', error);
@@ -166,8 +178,34 @@ export const GamificationPanel: React.FC<GamificationPanelProps> = ({
     }
   };
 
+  const loadXpLeaderboard = async () => {
+    setXpLoading(true);
+    try {
+      const qs = new URLSearchParams({
+        groupId,
+        startDate: xpStartDate,
+        endDate: xpEndDate,
+      });
+      const lb = await api.get(`/api/achievements/leaderboard?${qs.toString()}`);
+      setLeaderboard(lb);
+    } catch (error) {
+      console.error('XP leaderboard load error:', error);
+      setLeaderboard([]);
+    } finally {
+      setXpLoading(false);
+    }
+  };
+
   const sortedXpLeaderboard = useMemo(() => {
-    const list = [...leaderboard];
+    const q = xpPlayerSearch.trim().toLowerCase();
+    let list = [...leaderboard];
+    if (q) {
+      list = list.filter((e) => {
+        const n = (e.name || '').toLowerCase();
+        const nk = (e.nickname || '').toLowerCase();
+        return n.includes(q) || nk.includes(q);
+      });
+    }
     if (xpSortBy === XP_SORT_TOTAL) {
       list.sort((a, b) => b.xp - a.xp);
     } else {
@@ -178,7 +216,7 @@ export const GamificationPanel: React.FC<GamificationPanelProps> = ({
       });
     }
     return list;
-  }, [leaderboard, xpSortBy]);
+  }, [leaderboard, xpSortBy, xpPlayerSearch]);
 
   const loadPointsRanking = async () => {
     setPointsLoading(true);
@@ -350,8 +388,53 @@ export const GamificationPanel: React.FC<GamificationPanelProps> = ({
                 )}
               </>
             )
+          ) : xpLoading ? (
+            <div className="text-center text-navy-500 py-8">Carregando ranking XP...</div>
           ) : (
             <>
+              <Card className="p-4 border-navy-200 shadow-sm mb-2 bg-white">
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs font-bold text-navy-500 uppercase tracking-wide">Filtros (somente XP)</p>
+                  <div className="flex flex-col lg:flex-row flex-wrap items-stretch lg:items-end gap-3">
+                    <label className="flex-1 min-w-[12rem] flex flex-col gap-1">
+                      <span className="text-xs font-bold text-navy-500">Buscar por nome ou apelido</span>
+                      <div className="relative">
+                        <Search
+                          className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-navy-400 pointer-events-none"
+                          aria-hidden
+                        />
+                        <input
+                          type="search"
+                          value={xpPlayerSearch}
+                          onChange={(e) => setXpPlayerSearch(e.target.value)}
+                          placeholder="Filtrar jogadores…"
+                          className="w-full pl-9 pr-3 py-2 text-sm border border-navy-200 rounded-xl bg-white placeholder:text-navy-400"
+                          autoComplete="off"
+                        />
+                      </div>
+                    </label>
+                    <div className="flex flex-wrap items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-navy-500">De</span>
+                        <DateInput
+                          value={xpStartDate}
+                          onChange={setXpStartDate}
+                          className="bg-white border border-navy-200 rounded-xl px-3 py-2 text-xs"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-navy-500">Até</span>
+                        <DateInput
+                          value={xpEndDate}
+                          onChange={setXpEndDate}
+                          className="bg-white border border-navy-200 rounded-xl px-3 py-2 text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
               <Card className="p-0 overflow-hidden border-navy-200 shadow-sm mb-2">
                 <button
                   type="button"
@@ -514,7 +597,9 @@ export const GamificationPanel: React.FC<GamificationPanelProps> = ({
 
               {sortedXpLeaderboard.length === 0 && (
                 <div className="text-center text-navy-500 py-8">
-                  Nenhum jogador no ranking ainda.
+                  {leaderboard.length === 0
+                    ? 'Nenhum jogador no ranking neste período.'
+                    : 'Nenhum jogador corresponde à busca.'}
                 </div>
               )}
             </>
